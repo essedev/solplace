@@ -1,0 +1,20 @@
+{
+  "name": "solplace-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "pnpm --parallel run dev",
+    "build": "pnpm --parallel run build",
+    "test": "pnpm --parallel run test",
+    "anchor:build": "cd packages/program && anchor build",
+    "anchor:deploy": "cd packages/program && anchor deploy",
+    "anchor:test": "cd packages/program && anchor test"
+  },
+  "devDependencies": {
+    "@types/node": "^24.2.1",
+    "typescript": "^5.9.2"
+  }
+}

@@ -1,0 +1,39 @@
+{
+	"name": "@solplace/shared",
+	"version": "0.1.0",
+	"description": "Shared types, utilities and client for Solplace",
+	"type": "module",
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"exports": {
+		".": {
+			"import": "./dist/index.js",
+			"types": "./dist/index.d.ts"
+		}
+	},
+	"scripts": {
+		"build": "tsc",
+		"dev": "tsc --watch",
+		"clean": "rm -rf dist",
+		"test": "jest",
+		"lint": "eslint src --ext .ts",
+		"type-check": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@coral-xyz/anchor": "^0.31.1",
+		"@solana/web3.js": "^1.98.4"
+	},
+	"devDependencies": {
+		"@types/jest": "^30.0.0",
+		"@types/node": "^24.2.1",
+		"@typescript-eslint/eslint-plugin": "^8.39.1",
+		"@typescript-eslint/parser": "^8.39.1",
+		"eslint": "^9.33.0",
+		"jest": "^30.0.5",
+		"ts-jest": "^29.4.1",
+		"typescript": "^5.9.2"
+	},
+	"files": [
+		"dist"
+	]
+}
