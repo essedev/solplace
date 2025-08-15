@@ -14,7 +14,7 @@
     "anchor:test": "cd packages/program && anchor test"
   },
   "devDependencies": {
-    "@types/node": "^24.2.1",
+    "@types/node": "^24.3.0",
     "typescript": "^5.9.2"
   }
 }

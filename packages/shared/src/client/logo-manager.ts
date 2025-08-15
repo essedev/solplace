@@ -1,3 +1,4 @@
+import { getVisibleGridCells, GRID_CELL_SIZE } from "../grid-utils"
 import type { LogoPlacement, MapBounds } from "../types"
 import { CoreClient } from "./core-client"
 import type { LogoLoadResult, SolplaceClientConfig } from "./types"
@@ -61,14 +62,42 @@ export class LogoManager {
 	}
 
 	/**
-	 * Load multiple logos in bounds
+	 * Load multiple logos in bounds using the grid system
 	 */
 	async loadLogosInBounds(bounds: MapBounds): Promise<LogoPlacement[]> {
-		// Generate coordinate grid for the bounds
-		const coordinates = this.generateCoordinateGrid(bounds)
+		// Get all grid cells visible in the bounds
+		const gridCells = getVisibleGridCells(bounds)
+
+		console.log(
+			`Loading ${gridCells.length} grid cells for bounds:`,
+			bounds
+		)
+
+		// Convert grid coordinates to the center coordinates for the core client
+		const coordinates: Array<[number, number]> = gridCells.map(
+			([gridLat, gridLng]) => {
+				// Use grid cell center, which is where logos are actually placed
+				const centerLat = (gridLat + GRID_CELL_SIZE / 2) / 1_000_000
+				const centerLng = (gridLng + GRID_CELL_SIZE / 2) / 1_000_000
+				return [centerLat, centerLng]
+			}
+		)
 
 		// Load all logos at once
 		const logos = await this.coreClient.loadLogosAtCoordinates(coordinates)
+
+		// Cache the results if caching is enabled
+		if (this.config.enableCaching) {
+			const now = Date.now()
+			coordinates.forEach((coord, index) => {
+				const logoKey = `${coord[0]},${coord[1]}`
+				this.cache.set(logoKey, {
+					logo: logos[index],
+					cachedAt: now
+				})
+			})
+			this.enforceMaxCacheSize()
+		}
 
 		// Filter out null results and return only existing logos
 		return logos.filter((logo): logo is LogoPlacement => logo !== null)
@@ -123,31 +152,156 @@ export class LogoManager {
 	}
 
 	/**
-	 * Generate coordinate grid for bounds
-	 * Simple implementation for now
+	 * Get tokens visible in a specific area (simplified leaderboard)
 	 */
-	private generateCoordinateGrid(bounds: MapBounds): Array<[number, number]> {
-		const coordinates: Array<[number, number]> = []
+	async getVisibleTokens(
+		bounds: MapBounds
+	): Promise<
+		Array<{
+			tokenMint: string
+			logoUri?: string
+			coordinates: [number, number]
+		}>
+	> {
+		// Load logos in the current bounds
+		const logos = await this.loadLogosInBounds(bounds)
 
-		// For now, just sample some points in the bounds
-		// This should be made more sophisticated based on zoom level
-		const stepSize = 0.001 // ~100m
+		// Convert to simplified format
+		return logos.map((logo) => ({
+			tokenMint: logo.tokenMint,
+			logoUri: logo.logoUri,
+			coordinates: logo.coordinates
+		}))
+	}
 
-		for (let lat = bounds.minLat; lat <= bounds.maxLat; lat += stepSize) {
-			for (
-				let lng = bounds.minLng;
-				lng <= bounds.maxLng;
-				lng += stepSize
-			) {
-				coordinates.push([lat, lng])
+	/**
+	 * Get token leaderboard from cached data
+	 * NOTE: This only shows tokens that have been loaded in the current session
+	 */
+	async getTokenLeaderboard(): Promise<
+		Array<{ tokenMint: string; spotCount: number; logoUri?: string }>
+	> {
+		const tokenCounts = new Map<
+			string,
+			{ count: number; logoUri?: string }
+		>()
 
-				// Limit to avoid too many requests
-				if (coordinates.length >= 100) {
-					return coordinates
+		// Analizza tutti i loghi nella cache
+		for (const [, cachedData] of this.cache) {
+			if (cachedData.logo) {
+				const existing = tokenCounts.get(cachedData.logo.tokenMint)
+				if (existing) {
+					existing.count++
+				} else {
+					tokenCounts.set(cachedData.logo.tokenMint, {
+						count: 1,
+						logoUri: cachedData.logo.logoUri
+					})
 				}
 			}
 		}
 
-		return coordinates
+		// Converti in array e ordina per count
+		const leaderboard = Array.from(tokenCounts.entries()).map(
+			([tokenMint, data]) => ({
+				tokenMint,
+				spotCount: data.count,
+				...(data.logoUri && { logoUri: data.logoUri })
+			})
+		)
+
+		// Ordina per numero di spot (decrescente)
+		return leaderboard.sort((a, b) => b.spotCount - a.spotCount)
+	}
+
+	/**
+	 * Get global token leaderboard by scanning popular areas
+	 * This performs actual blockchain queries to get a more complete picture
+	 */
+	async getGlobalTokenLeaderboard(): Promise<
+		Array<{ tokenMint: string; spotCount: number; logoUri?: string }>
+	> {
+		const tokenCounts = new Map<
+			string,
+			{ count: number; logoUri?: string }
+		>()
+
+		// Define popular areas to scan (major cities, crypto hubs, etc.)
+		const popularAreas = [
+			// New York City
+			{
+				minLat: 40.7,
+				maxLat: 40.8,
+				minLng: -74.1,
+				maxLng: -73.9,
+				zoom: 16
+			},
+			// San Francisco
+			{
+				minLat: 37.7,
+				maxLat: 37.8,
+				minLng: -122.5,
+				maxLng: -122.3,
+				zoom: 16
+			},
+			// London
+			{ minLat: 51.4, maxLat: 51.6, minLng: -0.2, maxLng: 0.1, zoom: 16 },
+			// Tokyo
+			{
+				minLat: 35.6,
+				maxLat: 35.7,
+				minLng: 139.6,
+				maxLng: 139.8,
+				zoom: 16
+			}
+		]
+
+		// Scan each popular area
+		for (const area of popularAreas) {
+			try {
+				const logos = await this.loadLogosInBounds(area)
+
+				for (const logo of logos) {
+					const existing = tokenCounts.get(logo.tokenMint)
+					if (existing) {
+						existing.count++
+					} else {
+						tokenCounts.set(logo.tokenMint, {
+							count: 1,
+							logoUri: logo.logoUri
+						})
+					}
+				}
+			} catch (error) {
+				console.warn(`Failed to scan area:`, area, error)
+			}
+		}
+
+		// Merge with cached data to get complete picture
+		for (const [, cachedData] of this.cache) {
+			if (cachedData.logo) {
+				const existing = tokenCounts.get(cachedData.logo.tokenMint)
+				if (existing) {
+					existing.count++
+				} else {
+					tokenCounts.set(cachedData.logo.tokenMint, {
+						count: 1,
+						logoUri: cachedData.logo.logoUri
+					})
+				}
+			}
+		}
+
+		// Converti in array e ordina per count
+		const leaderboard = Array.from(tokenCounts.entries()).map(
+			([tokenMint, data]) => ({
+				tokenMint,
+				spotCount: data.count,
+				...(data.logoUri && { logoUri: data.logoUri })
+			})
+		)
+
+		// Ordina per numero di spot (decrescente)
+		return leaderboard.sort((a, b) => b.spotCount - a.spotCount)
 	}
 }

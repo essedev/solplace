@@ -33,8 +33,8 @@ export const RPC_ENDPOINTS = {
 export const SOLPLACE_PROGRAM_ID =
 	"Fw64bA7dMN1nzc1X82vsLydU63yHuBSNGHyozsZAqQBP"
 
-// Treasury wallet for fee collection
-export const TREASURY_WALLET = "EsseDev111111111111111111111111111111111111" // TODO: Update with your treasury wallet
+// Treasury wallet for fee collection (must match the program's TREASURY_ADDRESS)
+export const TREASURY_WALLET = "3ojcMQjKYfME4qGmgE8Qb9odKcu4kSes1xhcVXD7DXCd"
 
 // Common token mints for testing
 export const WELL_KNOWN_TOKENS = {

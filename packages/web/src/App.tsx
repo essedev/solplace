@@ -4,15 +4,12 @@ import {
 	WalletProvider
 } from "@solana/wallet-adapter-react"
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui"
-import {
-	PhantomWalletAdapter,
-	SolflareWalletAdapter
-} from "@solana/wallet-adapter-wallets"
 import { clusterApiUrl } from "@solana/web3.js"
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 
 import CooldownTimer from "./components/CooldownTimer"
 import FeeEstimator from "./components/FeeEstimator"
+import Leaderboard from "./components/Leaderboard"
 import SolplaceMap from "./components/SolplaceMap"
 import TokenPlacer from "./components/TokenPlacer"
 import WalletConnector from "./components/WalletConnector"
@@ -22,7 +19,7 @@ import "@solana/wallet-adapter-react-ui/styles.css"
 
 import { useAnchorWallet, useConnection } from "@solana/wallet-adapter-react"
 import { PublicKey } from "@solana/web3.js"
-import type { PlacementFee, UserCooldown } from "@solplace/shared"
+import type { MapBounds, PlacementFee, UserCooldown } from "@solplace/shared"
 import {
 	SOLPLACE_PROGRAM_ID,
 	SolplaceClient,
@@ -43,6 +40,8 @@ const AppContent = () => {
 	const [userCooldown, setUserCooldown] = useState<UserCooldown | null>(null)
 	const [isPlacing, setIsPlacing] = useState(false)
 	const [showPlacer, setShowPlacer] = useState(false)
+	const [showLeaderboard, setShowLeaderboard] = useState(false)
+	const [currentBounds, setCurrentBounds] = useState<MapBounds | null>(null)
 
 	const wallet = useAnchorWallet()
 	const { connection } = useConnection()
@@ -51,11 +50,9 @@ const AppContent = () => {
 	const connected = !!wallet
 	const publicKey = wallet?.publicKey
 
-	// Initialize client when needed
-	const getClient = useCallback(() => {
-		if (!wallet) {
-			throw new Error("Wallet not connected")
-		}
+	// Initialize client when wallet is available
+	const client = useMemo(() => {
+		if (!wallet) return null
 
 		const programId = new PublicKey(SOLPLACE_PROGRAM_ID)
 
@@ -79,7 +76,9 @@ const AppContent = () => {
 
 			// Calculate fee for this location
 			try {
-				const client = getClient()
+				if (!client) {
+					throw new Error("Wallet not connected")
+				}
 				const fee = await client.calculateFee(lat, lng)
 				setPlacementFee(fee)
 
@@ -93,18 +92,31 @@ const AppContent = () => {
 				)
 			}
 		},
-		[connected, publicKey, getClient]
+		[connected, publicKey, client]
 	)
+
+	// Load user cooldown on wallet connect
+	useEffect(() => {
+		if (connected && publicKey && client) {
+			const loadCooldown = async () => {
+				try {
+					const cooldown = await client.getUserCooldown(publicKey)
+					setUserCooldown(cooldown)
+				} catch (error) {
+					console.error("Failed to load user cooldown:", error)
+				}
+			}
+			loadCooldown()
+		}
+	}, [connected, publicKey, client])
 
 	// Handle token placement
 	const handlePlaceToken = useCallback(
 		async (tokenMint: string) => {
-			if (!selectedLocation || !publicKey || !connected) return
+			if (!selectedLocation || !publicKey || !connected || !client) return
 
 			setIsPlacing(true)
 			try {
-				const client = getClient()
-
 				// Check if user can place (cooldown check)
 				const canPlace = await client.canUserPlace(publicKey)
 				if (!canPlace) {
@@ -149,13 +161,16 @@ const AppContent = () => {
 				setIsPlacing(false)
 			}
 		},
-		[selectedLocation, publicKey, connected, getClient]
+		[selectedLocation, publicKey, connected, client]
 	)
 
 	return (
 		<div className="relative h-screen w-screen overflow-hidden">
 			{/* Map Component - Full Screen */}
-			<SolplaceMap onMapClick={handleMapClick} />
+			<SolplaceMap
+				onMapClick={handleMapClick}
+				onBoundsChange={setCurrentBounds}
+			/>
 
 			{/* UI Overlay */}
 			<div className="absolute inset-0 pointer-events-none">
@@ -189,6 +204,9 @@ const AppContent = () => {
 							setPlacementFee(null)
 						}}
 						isPlacing={isPlacing}
+						validateTokenMint={client?.validateTokenMint.bind(
+							client
+						)}
 					/>
 				)}
 
@@ -201,6 +219,16 @@ const AppContent = () => {
 				{placementFee && !showPlacer && (
 					<FeeEstimator fee={placementFee} />
 				)}
+
+				{/* Leaderboard - Positioned above instructions */}
+				<div className="absolute bottom-36 right-4">
+					<Leaderboard
+						client={client}
+						isVisible={showLeaderboard}
+						onToggle={() => setShowLeaderboard(!showLeaderboard)}
+						currentBounds={currentBounds || undefined}
+					/>
+				</div>
 
 				{/* Instructions */}
 				<div className="absolute bottom-4 right-4 bg-black/50 text-white p-4 rounded text-sm max-w-xs pointer-events-auto">
@@ -224,11 +252,8 @@ const AppContent = () => {
 }
 
 function App() {
-	// Configure wallet adapters
-	const wallets = useMemo(
-		() => [new PhantomWalletAdapter(), new SolflareWalletAdapter()],
-		[]
-	)
+	// Use empty wallets array since Standard Wallet adapters auto-detect
+	const wallets = useMemo(() => [], [])
 
 	return (
 		<ConnectionProvider endpoint={DEVNET_RPC_ENDPOINT}>

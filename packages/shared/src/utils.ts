@@ -1,4 +1,5 @@
 import { PublicKey } from "@solana/web3.js"
+import { Buffer } from "buffer"
 import {
 	BASE_PLACEMENT_FEE,
 	CLUSTER_RESOLUTION,

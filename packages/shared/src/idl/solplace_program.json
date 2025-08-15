@@ -225,6 +225,11 @@
       "code": 6010,
       "name": "InvalidCooldown",
       "msg": "Invalid cooldown PDA"
+    },
+    {
+      "code": 6011,
+      "name": "InvalidAccount",
+      "msg": "Invalid account: discriminator mismatch"
     }
   ],
   "types": [

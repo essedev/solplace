@@ -14,9 +14,7 @@ const FeeEstimator: React.FC<FeeEstimatorProps> = ({ fee }) => {
 				<div className="space-y-1 text-xs">
 					<div className="flex justify-between">
 						<span>Base fee:</span>
-						<span>
-							~$0.30 ({(fee.baseFee / 1e9).toFixed(3)} SOL)
-						</span>
+						<span>{(fee.baseFee / 1e9).toFixed(3)} SOL</span>
 					</div>
 
 					{fee.isOverwrite && (
@@ -34,10 +32,7 @@ const FeeEstimator: React.FC<FeeEstimatorProps> = ({ fee }) => {
 					<div className="border-t border-gray-600 pt-1 mt-2">
 						<div className="flex justify-between font-medium">
 							<span>Total:</span>
-							<span>
-								~${(fee.amount * 0.15).toFixed(2)} (
-								{(fee.amount / 1e9).toFixed(3)} SOL)
-							</span>
+							<span>{(fee.amount / 1e9).toFixed(3)} SOL</span>
 						</div>
 					</div>
 				</div>

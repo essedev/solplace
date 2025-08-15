@@ -1,4 +1,5 @@
 import { AnchorProvider, Idl, Program } from "@coral-xyz/anchor"
+import { getMint } from "@solana/spl-token"
 import {
 	Connection,
 	PublicKey,
@@ -9,8 +10,7 @@ import { SolplaceProgram } from "../idl/solplace_program"
 import type { LogoPlacement, PlacementFee, UserCooldown } from "../types"
 import {
 	calculatePlacementFee,
-	getClusterId,
-	getClusterPDA,
+	getLogoPlacementPDA,
 	getUserCooldownPDA
 } from "../utils"
 import { convertAnchorCooldown } from "./converters"
@@ -66,7 +66,7 @@ export class CoreClient {
 
 	/**
 	 * Load logo placement at specific coordinates
-	 * Implementation using cluster architecture (transitional)
+	 * Updated implementation using individual logo placement PDAs
 	 */
 	async loadLogoAtCoordinates(
 		lat: number,
@@ -74,40 +74,30 @@ export class CoreClient {
 	): Promise<LogoPlacement | null> {
 		try {
 			const program = await this.getProgram()
-			const clusterId = getClusterId(lat, lng)
-			const clusterPDA = getClusterPDA(clusterId, this.programId)
-
-			// Try to fetch the cluster
-			const clusterAccount = await program.account.cellCluster.fetch(
-				clusterPDA.publicKey
+			const logoPlacementPDA = getLogoPlacementPDA(
+				lat,
+				lng,
+				this.programId
 			)
 
-			// Convert coordinates to microdegrees for comparison
-			const latMicro = Math.round(lat * 1_000_000)
-			const lngMicro = Math.round(lng * 1_000_000)
-
-			// Find the specific cell at these coordinates
-			const cell = clusterAccount.cells.find(
-				(cell: any) =>
-					cell.coordinates[0] === latMicro &&
-					cell.coordinates[1] === lngMicro
+			// Try to fetch the logo placement account
+			const logoAccount = await program.account.logoPlacement.fetch(
+				logoPlacementPDA.publicKey
 			)
-
-			if (!cell) return null
 
 			// Convert to LogoPlacement format
 			return {
-				coordinates: [latMicro, lngMicro] as [number, number],
-				tokenMint: cell.tokenMint.toString(),
-				logoUri: cell.logoUri,
-				logoHash: new Uint8Array(cell.logoHash),
-				placedBy: cell.placedBy.toString(),
-				placedAt: cell.placedAt.toNumber(),
-				overwriteCount: cell.overwriteCount,
-				bump: 0 // Not applicable for cluster architecture
+				coordinates: logoAccount.coordinates as [number, number],
+				tokenMint: logoAccount.tokenMint.toString(),
+				logoUri: logoAccount.logoUri,
+				logoHash: new Uint8Array(logoAccount.logoHash),
+				placedBy: logoAccount.placedBy.toString(),
+				placedAt: logoAccount.placedAt.toNumber(),
+				overwriteCount: logoAccount.overwriteCount,
+				bump: logoAccount.bump
 			}
 		} catch (error) {
-			// Cluster doesn't exist or coordinates not found
+			// Account doesn't exist or coordinates not found
 			return null
 		}
 	}
@@ -188,8 +178,21 @@ export class CoreClient {
 	}
 
 	/**
+	 * Validate that a public key is a valid SPL token mint
+	 */
+	async validateTokenMint(tokenMint: PublicKey): Promise<boolean> {
+		try {
+			await getMint(this.connection, tokenMint)
+			return true
+		} catch (error) {
+			console.warn("Invalid token mint:", error)
+			return false
+		}
+	}
+
+	/**
 	 * Place a logo at specific coordinates
-	 * Implementation using cluster architecture (transitional)
+	 * Updated implementation using individual logo placement PDAs
 	 */
 	async placeLogo(
 		lat: number,
@@ -199,30 +202,41 @@ export class CoreClient {
 		treasuryAddress: PublicKey
 	): Promise<string> {
 		try {
+			// Validate that tokenMint is a valid SPL token mint
+			const isValidMint = await this.validateTokenMint(tokenMint)
+			if (!isValidMint) {
+				throw new Error(
+					"The provided address is not a valid SPL token mint. Please ensure you're using a valid token mint address."
+				)
+			}
+
 			const program = await this.getProgram()
 
 			// Convert coordinates to microdegrees
 			const latMicro = Math.round(lat * 1_000_000)
 			const lngMicro = Math.round(lng * 1_000_000)
 
-			// Calculate PDAs
-			const clusterId = getClusterId(lat, lng)
-			const clusterPDA = getClusterPDA(clusterId, this.programId)
+			// Calculate PDAs using the new architecture
+			const logoPlacementPDA = getLogoPlacementPDA(
+				lat,
+				lng,
+				this.programId
+			)
 			const userCooldownPDA = getUserCooldownPDA(
 				this.wallet.publicKey,
 				this.programId
 			)
 
-			// Execute transaction using cluster architecture
+			// Execute transaction using new architecture
 			const txSignature = await program.methods
 				.placeLogo(latMicro, lngMicro, tokenMint, logoUri)
 				.accounts({
-					cellCluster: clusterPDA.publicKey,
+					logoPlacement: logoPlacementPDA.publicKey,
 					userCooldown: userCooldownPDA.publicKey,
 					tokenMint: tokenMint,
 					treasury: treasuryAddress,
 					user: this.wallet.publicKey
-					// systemProgram and rent are automatically included by Anchor
+					// systemProgram is automatically included by Anchor
 				})
 				.rpc()
 

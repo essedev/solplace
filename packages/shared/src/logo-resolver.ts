@@ -42,6 +42,15 @@ export class LogoResolver {
 			priority: 2,
 			resolve: async (mintAddress: string) => {
 				try {
+					// Use a CORS proxy or disable this source in development
+					if (
+						typeof window !== "undefined" &&
+						window.location.hostname === "localhost"
+					) {
+						// Skip pump.fun in development due to CORS
+						return null
+					}
+
 					const response = await fetch(
 						`https://pump.fun/api/tokens/${mintAddress}`,
 						{

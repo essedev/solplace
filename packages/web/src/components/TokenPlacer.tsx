@@ -1,3 +1,4 @@
+import { PublicKey } from "@solana/web3.js"
 import type { PlacementFee } from "@solplace/shared"
 import React, { useState } from "react"
 
@@ -7,6 +8,7 @@ interface TokenPlacerProps {
 	onPlaceToken: (tokenMint: string) => Promise<void>
 	onClose: () => void
 	isPlacing: boolean
+	validateTokenMint?: (tokenMint: PublicKey) => Promise<boolean>
 }
 
 const TokenPlacer: React.FC<TokenPlacerProps> = ({
@@ -14,10 +16,12 @@ const TokenPlacer: React.FC<TokenPlacerProps> = ({
 	fee,
 	onPlaceToken,
 	onClose,
-	isPlacing
+	isPlacing,
+	validateTokenMint
 }) => {
 	const [tokenMint, setTokenMint] = useState("")
 	const [isValidating, setIsValidating] = useState(false)
+	const [validationError, setValidationError] = useState<string | null>(null)
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault()
@@ -33,6 +37,12 @@ const TokenPlacer: React.FC<TokenPlacerProps> = ({
 			return
 		}
 
+		// Check if there's a validation error
+		if (validationError) {
+			alert(validationError)
+			return
+		}
+
 		try {
 			await onPlaceToken(tokenMint.trim())
 		} catch (error) {
@@ -41,15 +51,23 @@ const TokenPlacer: React.FC<TokenPlacerProps> = ({
 	}
 
 	const validateTokenAddress = async () => {
+		if (!tokenMint.trim() || !validateTokenMint) return
+
 		setIsValidating(true)
+		setValidationError(null)
+
 		try {
-			// TODO: Add actual token validation logic here
-			// This could check if the token exists, has metadata, etc.
-			await new Promise((resolve) => setTimeout(resolve, 500)) // Simulate validation
-			setIsValidating(false)
+			const publicKey = new PublicKey(tokenMint.trim())
+			const isValid = await validateTokenMint(publicKey)
+
+			if (!isValid) {
+				setValidationError("This address is not a valid SPL token mint")
+			}
 		} catch (error) {
-			setIsValidating(false)
 			console.error("Token validation failed:", error)
+			setValidationError("Invalid token address format")
+		} finally {
+			setIsValidating(false)
 		}
 	}
 
@@ -81,9 +99,8 @@ const TokenPlacer: React.FC<TokenPlacerProps> = ({
 
 					{fee && (
 						<div className="text-sm text-gray-600 mb-2">
-							<strong>Fee:</strong> ~$
-							{(fee.amount * 0.15).toFixed(2)} USD (
-							{(fee.amount / 1e9).toFixed(3)} SOL)
+							<strong>Fee:</strong>{" "}
+							{(fee.amount / 1e9).toFixed(3)} SOL
 							{fee.isOverwrite && (
 								<span className="text-orange-600 ml-1">
 									(Overwrite x{fee.multiplier})
@@ -120,6 +137,11 @@ const TokenPlacer: React.FC<TokenPlacerProps> = ({
 								🔍 Validating token...
 							</div>
 						)}
+						{validationError && (
+							<div className="text-xs text-red-600 mt-1">
+								⚠️ {validationError}
+							</div>
+						)}
 					</div>
 
 					{fee && (
@@ -128,8 +150,7 @@ const TokenPlacer: React.FC<TokenPlacerProps> = ({
 								<div className="flex justify-between mb-1">
 									<span>Base fee:</span>
 									<span>
-										~$0.30 ({(fee.baseFee / 1e9).toFixed(3)}{" "}
-										SOL)
+										{(fee.baseFee / 1e9).toFixed(3)} SOL
 									</span>
 								</div>
 								{fee.isOverwrite && (
@@ -141,8 +162,7 @@ const TokenPlacer: React.FC<TokenPlacerProps> = ({
 								<div className="flex justify-between font-medium border-t pt-1 mt-1">
 									<span>Total:</span>
 									<span>
-										~${(fee.amount * 0.15).toFixed(2)} (
-										{(fee.amount / 1e9).toFixed(3)} SOL)
+										{(fee.amount / 1e9).toFixed(3)} SOL
 									</span>
 								</div>
 							</div>
@@ -165,10 +185,11 @@ const TokenPlacer: React.FC<TokenPlacerProps> = ({
 							}>
 							{isPlacing
 								? "Placing..."
-								: `Place Logo (~$${
+								: `Place Logo (${
 										fee
-											? (fee.amount * 0.15).toFixed(2)
-											: "0.30"
+											? (fee.amount / 1e9).toFixed(3) +
+											  " SOL"
+											: "0.001 SOL"
 								  })`}
 						</button>
 					</div>

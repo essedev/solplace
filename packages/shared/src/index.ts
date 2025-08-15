@@ -1,5 +1,6 @@
 // Export types
 export * from "./constants"
+export * from "./grid-utils"
 export * from "./logo-resolver"
 export * from "./types"
 export * from "./utils"

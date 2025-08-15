@@ -50,6 +50,13 @@ export class SolplaceClient {
 	}
 
 	/**
+	 * Validate that a public key is a valid SPL token mint
+	 */
+	async validateTokenMint(tokenMint: PublicKey): Promise<boolean> {
+		return this.core.validateTokenMint(tokenMint)
+	}
+
+	/**
 	 * Calculate placement fee for coordinates
 	 */
 	async calculateFee(lat: number, lng: number): Promise<PlacementFee> {
@@ -150,6 +157,41 @@ export class SolplaceClient {
 	 */
 	getWalletPublicKey(): PublicKey {
 		return this.core.getWalletPublicKey()
+	}
+
+	/**
+	 * Get global token statistics (leaderboard data)
+	 * This scans popular areas for a more complete picture
+	 */
+	async getTokenLeaderboard(): Promise<
+		Array<{ tokenMint: string; spotCount: number; logoUri?: string }>
+	> {
+		return this.logos.getGlobalTokenLeaderboard()
+	}
+
+	/**
+	 * Get tokens visible in the current map area
+	 */
+	async getVisibleTokens(
+		bounds: MapBounds
+	): Promise<
+		Array<{
+			tokenMint: string
+			logoUri?: string
+			coordinates: [number, number]
+		}>
+	> {
+		return this.logos.getVisibleTokens(bounds)
+	}
+
+	/**
+	 * Get local token statistics (from cache only)
+	 * Fast but limited to areas the user has visited
+	 */
+	async getLocalTokenLeaderboard(): Promise<
+		Array<{ tokenMint: string; spotCount: number; logoUri?: string }>
+	> {
+		return this.logos.getTokenLeaderboard()
 	}
 
 	/**
