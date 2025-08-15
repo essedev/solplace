@@ -9,6 +9,13 @@ interface TokenPlacerProps {
 	onClose: () => void
 	isPlacing: boolean
 	validateTokenMint?: (tokenMint: PublicKey) => Promise<boolean>
+	existingLogo?: {
+		logoUri: string
+		tokenMint: string
+		placedBy: string
+		placedAt: number
+		overwriteCount: number
+	} | null
 }
 
 const TokenPlacer: React.FC<TokenPlacerProps> = ({
@@ -17,7 +24,8 @@ const TokenPlacer: React.FC<TokenPlacerProps> = ({
 	onPlaceToken,
 	onClose,
 	isPlacing,
-	validateTokenMint
+	validateTokenMint,
+	existingLogo
 }) => {
 	const [tokenMint, setTokenMint] = useState("")
 	const [isValidating, setIsValidating] = useState(false)
@@ -25,161 +33,178 @@ const TokenPlacer: React.FC<TokenPlacerProps> = ({
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault()
-
-		if (!tokenMint.trim()) {
-			alert("Please enter a token address")
-			return
-		}
-
-		// Basic validation - Solana addresses are base58 and 32-44 characters
-		if (tokenMint.length < 32 || tokenMint.length > 44) {
-			alert("Invalid token address format")
-			return
-		}
-
-		// Check if there's a validation error
-		if (validationError) {
-			alert(validationError)
-			return
-		}
-
+		if (!tokenMint.trim()) return alert("Please enter a token address")
+		if (tokenMint.length < 32 || tokenMint.length > 44)
+			return alert("Invalid token address format")
+		if (validationError) return alert(validationError)
 		try {
 			await onPlaceToken(tokenMint.trim())
-		} catch (error) {
-			console.error("Failed to place token:", error)
+		} catch (err) {
+			console.error("Failed to place token", err)
 		}
 	}
 
 	const validateTokenAddress = async () => {
 		if (!tokenMint.trim() || !validateTokenMint) return
-
 		setIsValidating(true)
 		setValidationError(null)
-
 		try {
-			const publicKey = new PublicKey(tokenMint.trim())
-			const isValid = await validateTokenMint(publicKey)
-
-			if (!isValid) {
+			const pk = new PublicKey(tokenMint.trim())
+			const ok = await validateTokenMint(pk)
+			if (!ok)
 				setValidationError("This address is not a valid SPL token mint")
-			}
-		} catch (error) {
-			console.error("Token validation failed:", error)
+		} catch {
 			setValidationError("Invalid token address format")
 		} finally {
 			setIsValidating(false)
 		}
 	}
 
-	const formatCoordinate = (coord: number) => {
-		return coord.toFixed(6)
-	}
+	const formatCoordinate = (c: number) => c.toFixed(6)
 
 	return (
-		<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 pointer-events-auto">
-			<div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-				<div className="flex justify-between items-center mb-4">
-					<h2 className="text-xl font-bold text-gray-900">
-						Place Token Logo
-					</h2>
+		<div className="modal-overlay pointer-events-auto">
+			<div className="modal relative">
+				<div className="flex items-center justify-between mb-4">
+					<h2 className="modal-title">Place Token Logo</h2>
 					<button
 						onClick={onClose}
-						className="text-gray-500 hover:text-gray-700"
+						className="btn btn-ghost btn-sm"
 						disabled={isPlacing}>
 						✕
 					</button>
 				</div>
 
-				<div className="mb-4">
-					<div className="text-sm text-gray-600 mb-2">
-						<strong>Location:</strong>{" "}
-						{formatCoordinate(location.lat)},{" "}
-						{formatCoordinate(location.lng)}
+				<div className="grid gap-3 mb-4 text-sm">
+					<div className="flex justify-between text-slate-600">
+						<span className="font-medium text-slate-500">
+							Location
+						</span>
+						<span className="font-mono text-slate-700">
+							{formatCoordinate(location.lat)},{" "}
+							{formatCoordinate(location.lng)}
+						</span>
 					</div>
-
 					{fee && (
-						<div className="text-sm text-gray-600 mb-2">
-							<strong>Fee:</strong>{" "}
-							{(fee.amount / 1e9).toFixed(3)} SOL
-							{fee.isOverwrite && (
-								<span className="text-orange-600 ml-1">
-									(Overwrite x{fee.multiplier})
-								</span>
+						<div className="flex justify-between text-slate-600">
+							<span className="font-medium text-slate-500">
+								Fee
+							</span>
+							<span className="font-mono">
+								{(fee.amount / 1e9).toFixed(3)} SOL
+								{fee.isOverwrite && (
+									<span className="text-amber-600 ml-1">
+										(x{fee.multiplier})
+									</span>
+								)}
+							</span>
+						</div>
+					)}
+					{fee?.isOverwrite && existingLogo && (
+						<div className="mt-1 rounded-lg bg-white/60 backdrop-blur-sm border border-white/70 p-2 flex items-center gap-3 text-[11px]">
+							{existingLogo.logoUri && (
+								<img
+									src={existingLogo.logoUri}
+									alt="current logo"
+									className="w-8 h-8 rounded-full object-cover ring-1 ring-white/40"
+									onError={(e) => {
+										;(
+											e.target as HTMLImageElement
+										).style.display = "none"
+									}}
+								/>
 							)}
+							<div className="flex-1 min-w-0">
+								<div className="font-mono truncate text-slate-700">
+									{existingLogo.tokenMint.slice(0, 10)}...
+								</div>
+								<div className="text-[10px] text-slate-500">
+									Placed by{" "}
+									{existingLogo.placedBy.slice(0, 8)}… ·
+									Overwrites {existingLogo.overwriteCount}
+								</div>
+							</div>
 						</div>
 					)}
 				</div>
 
-				<form onSubmit={handleSubmit} className="space-y-4">
+				<form onSubmit={handleSubmit} className="space-y-5">
 					<div>
 						<label
 							htmlFor="tokenMint"
-							className="block text-sm font-medium text-gray-700 mb-1">
+							className="block text-xs font-semibold tracking-wide uppercase text-slate-500 mb-2">
 							Token Contract Address
 						</label>
-						<input
-							type="text"
-							id="tokenMint"
-							value={tokenMint}
-							onChange={(e) => {
-								setTokenMint(e.target.value)
-								if (e.target.value.length >= 32) {
-									validateTokenAddress()
-								}
-							}}
-							placeholder="Enter Solana token address (e.g., DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263)"
-							className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
-							disabled={isPlacing}
-							required
-						/>
-						{isValidating && (
-							<div className="text-xs text-gray-500 mt-1">
-								🔍 Validating token...
-							</div>
-						)}
-						{validationError && (
-							<div className="text-xs text-red-600 mt-1">
-								⚠️ {validationError}
-							</div>
-						)}
+						<div className="relative">
+							<input
+								type="text"
+								id="tokenMint"
+								value={tokenMint}
+								onChange={(e) => {
+									setTokenMint(e.target.value)
+									if (e.target.value.length >= 32) {
+										validateTokenAddress()
+									}
+								}}
+								placeholder="DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"
+								className="w-full rounded-lg border border-slate-200/80 bg-white/60 backdrop-blur-sm px-3 py-2.5 text-sm font-mono tracking-tight text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-purple-400 shadow-inner shadow-white/40"
+								disabled={isPlacing}
+								required
+							/>
+							{isValidating && (
+								<div className="absolute -bottom-5 left-0 text-[10px] text-slate-500">
+									🔍 Validating...
+								</div>
+							)}
+							{validationError && (
+								<div className="absolute -bottom-5 left-0 text-[10px] text-rose-600">
+									⚠ {validationError}
+								</div>
+							)}
+						</div>
 					</div>
 
 					{fee && (
-						<div className="bg-gray-50 p-3 rounded-md">
-							<div className="text-sm">
-								<div className="flex justify-between mb-1">
-									<span>Base fee:</span>
-									<span>
-										{(fee.baseFee / 1e9).toFixed(3)} SOL
+						<div className="glass-panel panel-padding grid gap-2 text-[11px]">
+							<div className="flex justify-between">
+								<span className="text-slate-400">Base</span>
+								<span className="font-mono">
+									{(fee.baseFee / 1e9).toFixed(3)} SOL
+								</span>
+							</div>
+							{fee.isOverwrite && (
+								<div className="flex justify-between text-amber-400">
+									<span>Overwrite x{fee.multiplier}</span>
+									<span className="font-mono">
+										{(
+											(fee.baseFee * fee.multiplier) /
+											1e9
+										).toFixed(3)}{" "}
+										SOL
 									</span>
 								</div>
-								{fee.isOverwrite && (
-									<div className="flex justify-between mb-1">
-										<span>Overwrite multiplier:</span>
-										<span>x{fee.multiplier}</span>
-									</div>
-								)}
-								<div className="flex justify-between font-medium border-t pt-1 mt-1">
-									<span>Total:</span>
-									<span>
-										{(fee.amount / 1e9).toFixed(3)} SOL
-									</span>
-								</div>
+							)}
+							<div className="panel-divider my-1" />
+							<div className="flex justify-between items-center">
+								<span className="text-slate-300">Total</span>
+								<span className="font-semibold bg-gradient-to-r from-purple-500 to-indigo-500 bg-clip-text text-transparent">
+									{(fee.amount / 1e9).toFixed(3)} SOL
+								</span>
 							</div>
 						</div>
 					)}
 
-					<div className="flex space-x-3">
+					<div className="flex gap-3 pt-2">
 						<button
 							type="button"
 							onClick={onClose}
-							className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 disabled:opacity-50"
+							className="btn btn-secondary btn-md flex-1"
 							disabled={isPlacing}>
 							Cancel
 						</button>
 						<button
 							type="submit"
-							className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+							className="btn btn-primary btn-md flex-1"
 							disabled={
 								isPlacing || !tokenMint.trim() || isValidating
 							}>
@@ -195,18 +220,22 @@ const TokenPlacer: React.FC<TokenPlacerProps> = ({
 					</div>
 				</form>
 
-				<div className="mt-4 text-xs text-gray-500">
-					<p>
-						💡 <strong>Tip:</strong> Popular token examples:
+				<div className="mt-8 text-[10px] leading-relaxed text-slate-500">
+					<p className="font-medium text-slate-600 mb-1">Examples:</p>
+					<ul className="space-y-1 font-mono">
+						<li>
+							<span className="text-slate-400">BONK</span>:
+							DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263
+						</li>
+						<li>
+							<span className="text-slate-400">WIF</span>:
+							EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm
+						</li>
+					</ul>
+					<p className="mt-3 text-slate-400">
+						Ensure the address is a valid SPL token mint. Fees
+						support the SolPlace treasury.
 					</p>
-					<div className="mt-1 space-y-1">
-						<div>
-							BONK: DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263
-						</div>
-						<div>
-							WIF: EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm
-						</div>
-					</div>
 				</div>
 			</div>
 		</div>

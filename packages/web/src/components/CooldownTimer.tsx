@@ -44,28 +44,36 @@ const CooldownTimer: React.FC<CooldownTimerProps> = ({ cooldown }) => {
 	}
 
 	return (
-		<div className="absolute top-20 right-4 bg-orange-500 text-white p-3 rounded-lg shadow-lg pointer-events-auto">
-			<div className="flex items-center space-x-2">
-				<div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
-				<div>
-					<div className="font-medium text-sm">Cooldown Active</div>
-					<div className="text-xs opacity-90">
-						Next placement in: {formatTime(timeRemaining)}
+		<div className="absolute top-24 right-4 floating-panel panel-padding w-64 pointer-events-auto fade-in">
+			<div className="flex items-start gap-3">
+				<div className="relative flex h-5 w-5 items-center justify-center">
+					<span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400/60" />
+					<span className="relative inline-flex h-3.5 w-3.5 rounded-full bg-amber-400 shadow-[0_0_0_1px_rgba(255,255,255,0.4)]" />
+				</div>
+				<div className="flex-1 min-w-0">
+					<div className="flex items-center justify-between">
+						<div className="text-xs font-semibold tracking-wide uppercase text-amber-300/90">
+							Cooldown
+						</div>
+						<div className="text-[11px] text-slate-400">
+							{formatTime(timeRemaining)}
+						</div>
+					</div>
+					<div className="text-[11px] text-slate-300 mt-1">
+						Next placement available soon
+					</div>
+					<div className="mt-2 h-1.5 rounded-full bg-slate-600/40 overflow-hidden">
+						<div
+							className="h-full rounded-full bg-gradient-to-r from-amber-400 via-orange-400 to-rose-400 transition-all duration-1000"
+							style={{
+								width: `${Math.max(
+									0,
+									((30 - timeRemaining) / 30) * 100
+								)}%`
+							}}
+						/>
 					</div>
 				</div>
-			</div>
-
-			{/* Progress bar */}
-			<div className="mt-2 w-full bg-orange-600 rounded-full h-1">
-				<div
-					className="bg-white h-1 rounded-full transition-all duration-1000"
-					style={{
-						width: `${Math.max(
-							0,
-							((30 - timeRemaining) / 30) * 100
-						)}%`
-					}}
-				/>
 			</div>
 		</div>
 	)

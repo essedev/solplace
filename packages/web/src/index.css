@@ -1,1 +1,136 @@
 @import "tailwindcss";
+
+/* Custom design tokens & component abstractions */
+@layer base {
+	body,
+	#root {
+		@apply bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-slate-100 antialiased selection:bg-purple-600/70 selection:text-white;
+	}
+}
+
+@layer components {
+	/* Panels */
+	.floating-panel {
+		@apply bg-slate-900/70 backdrop-blur-md rounded-xl border border-white/5 shadow-xl shadow-slate-950/40;
+	}
+	.floating-panel-light {
+		@apply bg-white/80 backdrop-blur-md rounded-xl border border-white/60 shadow-lg;
+	}
+	.glass-panel {
+		@apply bg-white/10 backdrop-blur-md border border-white/10 rounded-xl shadow-lg shadow-black/30;
+	}
+	.panel-padding {
+		@apply p-3 sm:p-4;
+	}
+	.panel-heading {
+		@apply font-semibold tracking-wide text-sm uppercase text-slate-200/80;
+	}
+	.panel-divider {
+		@apply border-t border-white/10 my-3;
+	}
+
+	/* Buttons */
+	.btn {
+		@apply inline-flex items-center justify-center font-medium rounded-lg transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed gap-1;
+	}
+	.btn-sm {
+		@apply text-xs px-2.5 py-1.5;
+	}
+	.btn-md {
+		@apply text-sm px-4 py-2;
+	}
+	.btn-primary {
+		@apply bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-900/40 hover:from-purple-500 hover:to-indigo-500 active:scale-[0.97];
+	}
+	.btn-secondary {
+		@apply bg-slate-700/70 text-slate-100 hover:bg-slate-600/70 shadow hover:shadow-lg shadow-black/30;
+	}
+	.btn-ghost {
+		@apply bg-transparent text-slate-300 hover:text-white hover:bg-white/10;
+	}
+	.btn-danger {
+		@apply bg-rose-600 text-white hover:bg-rose-500 shadow shadow-rose-900/40;
+	}
+
+	/* Badges & chips */
+	.badge {
+		@apply inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-full bg-gradient-to-r from-purple-600/90 to-indigo-600/90 text-white shadow shadow-black/30;
+	}
+	.badge-soft {
+		@apply inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-full bg-white/10 text-white;
+	}
+	.status-pulse {
+		@apply relative;
+	}
+	.status-pulse::before {
+		content: "";
+		@apply absolute -inset-1 rounded-full bg-purple-500/30 animate-ping;
+	}
+
+	/* Typography */
+	.brand-gradient {
+		@apply bg-gradient-to-r from-purple-400 via-fuchsia-400 to-indigo-400 bg-clip-text text-transparent drop-shadow-[0_0_8px_rgba(109,40,217,0.35)];
+	}
+	.subtle-heading {
+		@apply text-slate-300 font-medium tracking-wide;
+	}
+
+	/* Overlays / modal */
+	.modal-overlay {
+		@apply fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4;
+	}
+	.modal {
+		/* Non si possono @apply classi personalizzate (floating-panel-light, panel-padding) */
+		@apply bg-white/80 backdrop-blur-md rounded-xl border border-white/60 shadow-lg w-full max-w-md p-3 sm:p-4 animate-[fadeIn_0.25s_ease-out];
+	}
+	.modal-title {
+		@apply text-lg font-bold bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent;
+	}
+
+	/* Animations */
+	@keyframes fadeIn {
+		from {
+			opacity: 0;
+			transform: translateY(4px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+	.fade-in {
+		@apply animate-[fadeIn_0.4s_ease-out];
+	}
+
+	/* Utility clusters */
+	.floating-shadow {
+		@apply shadow-xl shadow-black/40;
+	}
+	.inner-glow {
+		@apply ring-1 ring-white/10;
+	}
+	.scroll-y-soft {
+		@apply overflow-y-auto [scrollbar-width:thin] [scrollbar-color:theme(colors.slate.600)_transparent];
+	}
+	.scroll-y-soft::-webkit-scrollbar {
+		width: 6px;
+	}
+	.scroll-y-soft::-webkit-scrollbar-thumb {
+		@apply bg-slate-600/60 rounded-full;
+	}
+	.scroll-y-soft::-webkit-scrollbar-track {
+		@apply bg-transparent;
+	}
+}
+
+@layer utilities {
+	.tilt {
+		transform: perspective(800px) rotateX(6deg) rotateY(-6deg);
+	}
+	.card-hover {
+		@apply transition-all duration-300;
+	}
+	.card-hover:hover {
+		@apply scale-[1.02] shadow-2xl shadow-purple-900/30;
+	}
+}

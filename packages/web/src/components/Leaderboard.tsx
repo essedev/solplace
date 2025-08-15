@@ -11,7 +11,7 @@ interface LeaderboardProps {
 	client: SolplaceClient | null
 	isVisible: boolean
 	onToggle: () => void
-	currentBounds?: MapBounds // Add current map bounds
+	currentBounds?: MapBounds
 }
 
 const Leaderboard: React.FC<LeaderboardProps> = ({
@@ -26,66 +26,55 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
 
 	const loadVisibleTokens = useCallback(async () => {
 		if (!client || !currentBounds) return
-
 		setIsLoading(true)
 		try {
 			const tokens = await client.getVisibleTokens(currentBounds)
 			setVisibleTokens(tokens)
 			setLastUpdated(new Date())
-		} catch (error) {
-			console.error("Failed to load visible tokens:", error)
+		} catch (err) {
+			console.error("Failed to load visible tokens", err)
 		} finally {
 			setIsLoading(false)
 		}
 	}, [client, currentBounds])
 
-	// Carica quando le bounds cambiano o quando viene aperto
 	useEffect(() => {
 		if (client && isVisible && currentBounds) {
 			loadVisibleTokens()
 		}
 	}, [client, isVisible, currentBounds, loadVisibleTokens])
 
-	const formatTokenAddress = (address: string) => {
-		return `${address.slice(0, 4)}...${address.slice(-4)}`
-	}
-
-	const formatTime = (date: Date) => {
-		return date.toLocaleTimeString([], {
-			hour: "2-digit",
-			minute: "2-digit"
-		})
-	}
+	const formatTokenAddress = (address: string) =>
+		`${address.slice(0, 4)}...${address.slice(-4)}`
+	const formatTime = (date: Date) =>
+		date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
 
 	return (
 		<>
-			{/* Toggle Button */}
 			<button
 				onClick={(e) => {
 					e.preventDefault()
 					e.stopPropagation()
 					onToggle()
 				}}
-				className={`fixed right-4 bottom-[11.5rem] px-4 py-2 rounded-lg shadow-lg transition-colors pointer-events-auto ${
+				className={`fixed right-4 bottom-[12.5rem] btn btn-md pointer-events-auto font-semibold tracking-wide ${
 					isVisible
-						? "bg-purple-700 text-white hover:bg-purple-800"
-						: "bg-purple-600 text-white hover:bg-purple-700"
+						? "btn-primary ring-2 ring-purple-300/40"
+						: "btn-secondary"
 				}`}>
 				📍 Tokens in View
 			</button>
-
-			{/* Leaderboard Panel - Only visible when toggled */}
 			{isVisible && (
-				<div className="absolute bottom-[5.25rem] right-0 bg-white rounded-lg shadow-xl border border-gray-200 w-80 max-h-96 overflow-hidden pointer-events-auto">
-					{/* Header */}
-					<div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-purple-600 to-blue-600 text-white">
+				<div className="absolute bottom-[6.25rem] right-0 floating-panel-light shadow-2xl w-80 max-h-96 flex flex-col pointer-events-auto fade-in">
+					<div className="flex items-start justify-between p-4 pb-3 border-b border-white/40 bg-gradient-to-r from-purple-600/90 to-indigo-600/90 text-white rounded-t-xl">
 						<div>
-							<h3 className="font-bold text-lg">
-								📍 Tokens in View
+							<h3 className="font-semibold tracking-wide text-sm flex items-center gap-2">
+								<span className="text-lg">📍</span>Tokens in
+								View
 							</h3>
 							{lastUpdated && (
-								<p className="text-xs opacity-90">
-									Updated: {formatTime(lastUpdated)}
+								<p className="text-[10px] opacity-80 mt-0.5">
+									Updated {formatTime(lastUpdated)}
 								</p>
 							)}
 						</div>
@@ -95,67 +84,61 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
 								e.stopPropagation()
 								onToggle()
 							}}
-							className="text-white hover:bg-white/20 rounded p-1 transition-colors">
+							className="btn btn-ghost btn-sm !text-white hover:!bg-white/20">
 							✕
 						</button>
 					</div>
-
-					{/* Content */}
-					<div className="overflow-y-auto max-h-80">
+					<div className="scroll-y-soft flex-1">
 						{isLoading ? (
-							<div className="flex items-center justify-center p-8">
-								<div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600"></div>
-								<span className="ml-2 text-gray-600">
-									Loading...
+							<div className="flex items-center justify-center p-8 text-slate-500">
+								<div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-400"></div>
+								<span className="ml-3 text-xs font-medium tracking-wide">
+									Loading…
 								</span>
 							</div>
 						) : visibleTokens.length === 0 ? (
-							<div className="p-8 text-center text-gray-500">
-								<p>No tokens in this area</p>
-								<p className="text-sm">
-									Zoom out or move around to find tokens!
+							<div className="p-8 text-center text-slate-500 text-sm">
+								<p className="font-medium mb-1">
+									No tokens here
+								</p>
+								<p className="text-xs opacity-70">
+									Move or zoom to discover more placements.
 								</p>
 							</div>
 						) : (
-							<div className="p-2">
+							<ul className="p-2 space-y-2">
 								{visibleTokens.map((token, index) => (
-									<div
+									<li
 										key={`${token.tokenMint}-${token.coordinates[0]}-${token.coordinates[1]}`}
-										className="flex items-center p-3 hover:bg-gray-50 rounded-lg transition-colors">
-										{/* Index */}
-										<div className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 text-white font-bold text-sm mr-3">
+										className="group flex items-center gap-3 p-3 rounded-lg bg-white/60 hover:bg-white/80 transition shadow-sm">
+										<div className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-indigo-500 text-white font-bold text-xs shadow-md shadow-purple-900/40">
 											{index + 1}
 										</div>
-
-										{/* Logo */}
-										<div className="w-10 h-10 mr-3 flex-shrink-0">
+										<div className="w-10 h-10 flex-shrink-0">
 											{token.logoUri ? (
 												<img
 													src={token.logoUri}
 													alt={`${token.tokenMint} logo`}
-													className="w-full h-full rounded-full object-cover border-2 border-gray-200"
+													className="w-full h-full rounded-full object-cover border border-white/60 shadow-inner"
 													onError={(e) => {
-														// Fallback to identicon if image fails
-														const target =
+														;(
 															e.target as HTMLImageElement
-														target.src = `https://api.dicebear.com/7.x/identicon/svg?seed=${token.tokenMint}&size=40&backgroundColor=1e293b&foregroundColor=ffffff`
+														).src = `https://api.dicebear.com/7.x/identicon/svg?seed=${token.tokenMint}&size=40&backgroundColor=1e293b&foregroundColor=ffffff`
 													}}
 												/>
 											) : (
-												<div className="w-full h-full rounded-full bg-gradient-to-br from-gray-400 to-gray-600 flex items-center justify-center text-white font-bold text-xs">
+												<div className="w-full h-full rounded-full bg-gradient-to-br from-slate-400 to-slate-600 flex items-center justify-center text-white font-bold text-xs">
 													?
 												</div>
 											)}
 										</div>
-
-										{/* Info */}
 										<div className="flex-1 min-w-0">
-											<div className="font-mono text-sm font-medium text-gray-900 truncate">
+											<div className="font-mono text-xs font-semibold text-slate-800 truncate">
 												{formatTokenAddress(
 													token.tokenMint
 												)}
 											</div>
-											<div className="text-xs text-gray-500">
+											<div className="text-[10px] text-slate-500">
 												{token.coordinates[0] /
 													1_000_000}
 												,{" "}
@@ -163,24 +146,18 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
 													1_000_000}
 											</div>
 										</div>
-
-										{/* Location badge */}
-										<div className="flex-shrink-0 bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
-											📍
-										</div>
-									</div>
+										<div className="badge-soft">📍</div>
+									</li>
 								))}
-							</div>
+							</ul>
 						)}
 					</div>
-
-					{/* Footer */}
-					<div className="border-t bg-gray-50 p-3">
+					<div className="p-3 border-t border-white/50 bg-white/60 rounded-b-xl">
 						<button
 							onClick={loadVisibleTokens}
 							disabled={isLoading}
-							className="w-full text-center text-sm text-purple-600 hover:text-purple-800 disabled:text-gray-400 transition-colors">
-							{isLoading ? "Refreshing..." : "🔄 Refresh"}
+							className="btn btn-secondary btn-sm w-full disabled:opacity-60">
+							{isLoading ? "Refreshing…" : "🔄 Refresh"}
 						</button>
 					</div>
 				</div>

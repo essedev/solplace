@@ -38,13 +38,15 @@ interface SolplaceMapProps {
 	onBoundsChange?: (bounds: MapBounds) => void
 	onMapHover?: (lat: number, lng: number) => void
 	onMapHoverEnd?: () => void
+	onLogoCellClick?: (logo: LogoPlacement) => void
 }
 
 const SolplaceMap: React.FC<SolplaceMapProps> = ({
 	onMapClick,
 	onBoundsChange,
 	onMapHover,
-	onMapHoverEnd
+	onMapHoverEnd,
+	onLogoCellClick
 }) => {
 	const mapContainer = useRef<HTMLDivElement>(null)
 	const mapRef = useRef<maplibregl.Map | null>(null)
@@ -173,27 +175,28 @@ const SolplaceMap: React.FC<SolplaceMapProps> = ({
 				})
 			})
 
-			// Add click handler for logo details
+			// Click handler for logo details -> delegate via callback
 			map.on("click", "logos", (e) => {
 				if (e.features && e.features[0]) {
-					const feature = e.features[0]
-					const properties = feature.properties
-
-					new maplibregl.Popup()
-						.setLngLat(e.lngLat)
-						.setHTML(
-							`
-            <div class="p-2">
-              <strong>Token:</strong> ${properties?.tokenMint}<br>
-              <strong>Placed by:</strong> ${properties?.placedBy?.slice(
-					0,
-					8
-				)}...<br>
-              <strong>Overwrites:</strong> ${properties?.overwriteCount}
-            </div>
-          `
-						)
-						.addTo(map)
+					const feature = e
+						.features[0] as maplibregl.MapGeoJSONFeature
+					const props = feature.properties as unknown as Record<
+						string,
+						unknown
+					>
+					if (props && onLogoCellClick) {
+						onLogoCellClick({
+							coordinates: [
+								props.coordinatesLat ?? props.lat ?? 0,
+								props.coordinatesLng ?? props.lng ?? 0
+							],
+							logoUri: props.logoUri,
+							tokenMint: props.tokenMint,
+							placedBy: props.placedBy,
+							placedAt: props.placedAt,
+							overwriteCount: props.overwriteCount
+						} as LogoPlacement)
+					}
 				}
 			})
 
@@ -210,7 +213,7 @@ const SolplaceMap: React.FC<SolplaceMapProps> = ({
 				}
 			})
 		},
-		[isLoaded]
+		[isLoaded, onLogoCellClick]
 	)
 
 	// Show/hide grid overlay based on zoom level
@@ -474,37 +477,62 @@ const SolplaceMap: React.FC<SolplaceMapProps> = ({
 
 			{/* Loading overlay */}
 			{!isLoaded && (
-				<div className="absolute inset-0 bg-gray-900 flex items-center justify-center">
-					<div className="text-white text-center">
-						<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-						<p>Loading map...</p>
+				<div className="absolute inset-0 backdrop-blur-sm bg-slate-900/80 flex items-center justify-center z-10">
+					<div className="text-center">
+						<div className="animate-spin rounded-full h-12 w-12 border-2 border-white/30 border-t-transparent mx-auto mb-5"></div>
+						<p className="text-sm font-medium tracking-wide text-slate-300">
+							Loading map…
+						</p>
 					</div>
 				</div>
 			)}
 
-			{/* Zoom indicator e logos stats */}
+			{/* Status panel */}
 			{isLoaded && (
-				<div className="absolute bottom-4 left-4 bg-black/50 text-white p-2 rounded text-sm pointer-events-auto">
-					<div>Zoom: {currentZoom.toFixed(1)}</div>
-					{currentZoom < MIN_ZOOM_FOR_LOGOS ? (
-						<div className="text-yellow-300">
-							⚠️ Zoom to {MIN_ZOOM_FOR_LOGOS}+ to see logos
+				<div className="absolute bottom-4 left-4 floating-panel backdrop-blur-md pointer-events-auto w-60 sm:w-64 fade-in">
+					<div className="p-3 space-y-2 text-[11px] leading-relaxed">
+						<div className="flex items-center justify-between">
+							<span className="font-semibold text-slate-200/90">
+								Zoom
+							</span>
+							<span className="font-mono text-slate-300">
+								{currentZoom.toFixed(1)}
+							</span>
 						</div>
-					) : (
-						<div>Logos loaded: {visibleLogos.length}</div>
-					)}
-					{visibleLogos.length > 0 && (
-						<div>
-							Last placed:{" "}
-							{new Date(
-								Math.max(
-									...visibleLogos.map(
-										(logo) => logo.placedAt * 1000
-									)
-								)
-							).toLocaleTimeString()}
+						<div className="flex items-center justify-between">
+							<span className="font-semibold text-slate-200/90">
+								Logos
+							</span>
+							{currentZoom < MIN_ZOOM_FOR_LOGOS ? (
+								<span className="text-amber-300 flex items-center gap-1">
+									⚠️{" "}
+									<span className="hidden sm:inline">
+										Zoom {MIN_ZOOM_FOR_LOGOS}+ to view
+									</span>
+								</span>
+							) : (
+								<span className="font-mono text-slate-300">
+									{visibleLogos.length}
+								</span>
+							)}
 						</div>
-					)}
+						{visibleLogos.length > 0 && (
+							<div className="flex items-center justify-between">
+								<span className="font-semibold text-slate-200/90">
+									Last placed
+								</span>
+								<span className="font-mono text-slate-300">
+									{new Date(
+										Math.max(
+											...visibleLogos.map(
+												(logo) => logo.placedAt * 1000
+											)
+										)
+									).toLocaleTimeString()}
+								</span>
+							</div>
+						)}
+					</div>
 				</div>
 			)}
 		</div>

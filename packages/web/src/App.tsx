@@ -42,6 +42,13 @@ const AppContent = () => {
 	const [showPlacer, setShowPlacer] = useState(false)
 	const [showLeaderboard, setShowLeaderboard] = useState(false)
 	const [currentBounds, setCurrentBounds] = useState<MapBounds | null>(null)
+	const [currentCellLogo, setCurrentCellLogo] = useState<{
+		logoUri: string
+		tokenMint: string
+		placedBy: string
+		placedAt: number
+		overwriteCount: number
+	} | null>(null)
 
 	const wallet = useAnchorWallet()
 	const { connection } = useConnection()
@@ -72,6 +79,25 @@ const AppContent = () => {
 			}
 
 			setSelectedLocation({ lat, lng })
+			// Fetch existing logo in that cell (if any)
+			try {
+				if (client) {
+					const existing = await client.getLogoAtCoordinates(lat, lng)
+					setCurrentCellLogo(
+						existing
+							? {
+									logoUri: existing.logoUri,
+									tokenMint: existing.tokenMint,
+									placedBy: existing.placedBy,
+									placedAt: existing.placedAt,
+									overwriteCount: existing.overwriteCount
+							  }
+							: null
+					)
+				}
+			} catch (e) {
+				console.warn("Failed to fetch existing logo", e)
+			}
 			setShowPlacer(true)
 
 			// Calculate fee for this location
@@ -181,12 +207,26 @@ const AppContent = () => {
 			// Set new timeout for debounced fee calculation
 			hoverTimeoutRef.current = setTimeout(async () => {
 				try {
-					const fee = await client.calculateFee(lat, lng)
+					const [fee, logo] = await Promise.all([
+						client.calculateFee(lat, lng),
+						client.getLogoAtCoordinates(lat, lng)
+					])
 					setPlacementFee(fee)
+					setCurrentCellLogo(
+						logo
+							? {
+									logoUri: logo.logoUri,
+									tokenMint: logo.tokenMint,
+									placedBy: logo.placedBy,
+									placedAt: logo.placedAt,
+									overwriteCount: logo.overwriteCount
+							  }
+							: null
+					)
 				} catch (error) {
 					console.error("Failed to calculate hover fee:", error)
 				}
-			}, 300) // 300ms debounce
+			}, 300)
 		},
 		[connected, client, showPlacer]
 	)
@@ -201,6 +241,7 @@ const AppContent = () => {
 
 		if (!showPlacer) {
 			setPlacementFee(null)
+			setCurrentCellLogo(null)
 		}
 	}, [showPlacer])
 
@@ -218,17 +259,17 @@ const AppContent = () => {
 			<div className="absolute inset-0 pointer-events-none">
 				{/* Top Bar */}
 				<div className="absolute top-0 left-0 right-0 p-4 z-10">
-					<div className="flex justify-between items-center">
-						<div className="pointer-events-auto">
-							<h1 className="text-2xl font-bold text-white drop-shadow-lg">
+					<div className="flex justify-between items-start gap-4">
+						<div className="pointer-events-auto select-none">
+							<h1 className="text-3xl font-extrabold tracking-tight brand-gradient drop-shadow-sm">
 								SolPlace
 							</h1>
-							<p className="text-sm text-white/80 drop-shadow">
-								Collaborative Solana token map
+							<p className="text-xs md:text-sm text-slate-300/80 mt-1 max-w-sm leading-relaxed">
+								A collaborative on-chain token placement map on
+								Solana.
 							</p>
 						</div>
-
-						<div className="pointer-events-auto">
+						<div className="pointer-events-auto flex items-center gap-3">
 							<WalletConnector />
 						</div>
 					</div>
@@ -244,11 +285,13 @@ const AppContent = () => {
 							setShowPlacer(false)
 							setSelectedLocation(null)
 							setPlacementFee(null)
+							setCurrentCellLogo(null)
 						}}
 						isPlacing={isPlacing}
 						validateTokenMint={client?.validateTokenMint.bind(
 							client
 						)}
+						existingLogo={currentCellLogo}
 					/>
 				)}
 
@@ -259,7 +302,10 @@ const AppContent = () => {
 
 				{/* Fee Estimator (when hovering) */}
 				{placementFee && !showPlacer && (
-					<FeeEstimator fee={placementFee} />
+					<FeeEstimator
+						fee={placementFee}
+						existingLogo={currentCellLogo}
+					/>
 				)}
 
 				{/* Leaderboard - Positioned above instructions */}
@@ -273,20 +319,41 @@ const AppContent = () => {
 				</div>
 
 				{/* Instructions */}
-				<div className="absolute bottom-4 right-4 bg-black/50 text-white p-4 rounded text-sm max-w-xs pointer-events-auto">
-					<h3 className="font-bold mb-2">How to use SolPlace:</h3>
-					<ul className="space-y-1 text-xs">
-						<li>1. Connect your wallet</li>
-						<li>2. Click on the map to select a location</li>
-						<li>3. Enter a valid Solana token address</li>
-						<li>4. Pay the placement fee</li>
-						<li>5. Watch your token appear on the map!</li>
-					</ul>
-					{!connected && (
-						<div className="mt-3 p-2 bg-purple-600 rounded text-center text-xs">
-							👆 Connect wallet to start
-						</div>
-					)}
+				<div className="absolute bottom-4 right-4 floating-panel backdrop-blur-md pointer-events-auto w-72 sm:w-80 fade-in">
+					<div className="p-4 pb-3">
+						<h3 className="text-xs font-semibold tracking-wide uppercase text-slate-300/90 flex items-center gap-2">
+							<span className="text-sm">🧭</span>Quick Guide
+						</h3>
+						<ul className="mt-3 space-y-1.5 text-[11px] leading-relaxed text-slate-300/90">
+							<li className="flex gap-1">
+								<span className="text-slate-400">1.</span>
+								<span>Connect wallet</span>
+							</li>
+							<li className="flex gap-1">
+								<span className="text-slate-400">2.</span>
+								<span>Click a grid cell</span>
+							</li>
+							<li className="flex gap-1">
+								<span className="text-slate-400">3.</span>
+								<span>Enter token mint</span>
+							</li>
+							<li className="flex gap-1">
+								<span className="text-slate-400">4.</span>
+								<span>Confirm & pay</span>
+							</li>
+							<li className="flex gap-1">
+								<span className="text-slate-400">5.</span>
+								<span>Logo appears live</span>
+							</li>
+						</ul>
+						{!connected && (
+							<div className="mt-3 text-center">
+								<div className="badge-soft w-full justify-center bg-purple-600/30 text-purple-100 ring-1 ring-inset ring-purple-500/40">
+									👆 Connect wallet to start
+								</div>
+							</div>
+						)}
+					</div>
 				</div>
 			</div>
 		</div>
