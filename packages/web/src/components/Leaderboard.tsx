@@ -71,7 +71,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
 						? "bg-purple-700 text-white hover:bg-purple-800"
 						: "bg-purple-600 text-white hover:bg-purple-700"
 				}`}>
-				� Tokens in View
+				📍 Tokens in View
 			</button>
 
 			{/* Leaderboard Panel - Only visible when toggled */}

@@ -36,11 +36,15 @@ const MAP_STYLE: maplibregl.StyleSpecification = {
 interface SolplaceMapProps {
 	onMapClick?: (lat: number, lng: number) => void
 	onBoundsChange?: (bounds: MapBounds) => void
+	onMapHover?: (lat: number, lng: number) => void
+	onMapHoverEnd?: () => void
 }
 
 const SolplaceMap: React.FC<SolplaceMapProps> = ({
 	onMapClick,
-	onBoundsChange
+	onBoundsChange,
+	onMapHover,
+	onMapHoverEnd
 }) => {
 	const mapContainer = useRef<HTMLDivElement>(null)
 	const mapRef = useRef<maplibregl.Map | null>(null)
@@ -370,7 +374,8 @@ const SolplaceMap: React.FC<SolplaceMapProps> = ({
 			container: mapContainer.current,
 			style: MAP_STYLE,
 			center: [-117.267998, 32.991602], // San Diego coordinates
-			zoom: 10
+			zoom: 10,
+			attributionControl: false // Remove attribution control completely
 		})
 
 		// Initialize Solplace client when wallet is connected
@@ -414,6 +419,24 @@ const SolplaceMap: React.FC<SolplaceMapProps> = ({
 				onMapClick?.(snappedLat, snappedLng)
 			})
 
+			// Add hover handlers for fee estimation
+			map.on("mousemove", (e) => {
+				const { lat, lng } = e.lngLat
+
+				// Snap hover to the nearest grid cell
+				const [gridLat, gridLng] = latLngToGridCell(lat, lng)
+				const [snappedLat, snappedLng] = getGridCellCenter(
+					gridLat,
+					gridLng
+				)
+
+				onMapHover?.(snappedLat, snappedLng)
+			})
+
+			map.on("mouseleave", () => {
+				onMapHoverEnd?.()
+			})
+
 			// Add move handler for loading logos with debouncing
 			let timeoutId: NodeJS.Timeout
 			const debouncedUpdate = () => {
@@ -436,7 +459,14 @@ const SolplaceMap: React.FC<SolplaceMapProps> = ({
 			map.remove()
 			mapRef.current = null
 		}
-	}, [connection, wallet, onMapClick, updateVisibleLogos])
+	}, [
+		connection,
+		wallet,
+		onMapClick,
+		onMapHover,
+		onMapHoverEnd,
+		updateVisibleLogos
+	])
 
 	return (
 		<div className="relative w-full h-full">

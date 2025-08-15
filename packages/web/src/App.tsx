@@ -5,7 +5,7 @@ import {
 } from "@solana/wallet-adapter-react"
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui"
 import { clusterApiUrl } from "@solana/web3.js"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import CooldownTimer from "./components/CooldownTimer"
 import FeeEstimator from "./components/FeeEstimator"
@@ -164,12 +164,54 @@ const AppContent = () => {
 		[selectedLocation, publicKey, connected, client]
 	)
 
+	// Handle map hover for fee estimation with debounce
+	const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+	const handleMapHover = useCallback(
+		async (lat: number, lng: number) => {
+			if (!connected || !client || showPlacer) {
+				return
+			}
+
+			// Clear previous timeout
+			if (hoverTimeoutRef.current) {
+				clearTimeout(hoverTimeoutRef.current)
+			}
+
+			// Set new timeout for debounced fee calculation
+			hoverTimeoutRef.current = setTimeout(async () => {
+				try {
+					const fee = await client.calculateFee(lat, lng)
+					setPlacementFee(fee)
+				} catch (error) {
+					console.error("Failed to calculate hover fee:", error)
+				}
+			}, 300) // 300ms debounce
+		},
+		[connected, client, showPlacer]
+	)
+
+	// Handle map hover end
+	const handleMapHoverEnd = useCallback(() => {
+		// Clear pending hover timeout
+		if (hoverTimeoutRef.current) {
+			clearTimeout(hoverTimeoutRef.current)
+			hoverTimeoutRef.current = null
+		}
+
+		if (!showPlacer) {
+			setPlacementFee(null)
+		}
+	}, [showPlacer])
+
 	return (
 		<div className="relative h-screen w-screen overflow-hidden">
 			{/* Map Component - Full Screen */}
 			<SolplaceMap
 				onMapClick={handleMapClick}
 				onBoundsChange={setCurrentBounds}
+				onMapHover={handleMapHover}
+				onMapHoverEnd={handleMapHoverEnd}
 			/>
 
 			{/* UI Overlay */}
