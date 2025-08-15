@@ -1,1 +1,6 @@
 @import "tailwindcss";
+
+/* Hide MapLibre attribution button */
+.maplibregl-ctrl-attrib-button {
+	display: none !important;
+}
