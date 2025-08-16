@@ -1,9 +1,5 @@
-import { useAnchorWallet, useConnection } from "@solana/wallet-adapter-react"
-import { PublicKey } from "@solana/web3.js"
 import type { LogoPlacement, MapBounds } from "@solplace/shared"
 import {
-	SOLPLACE_PROGRAM_ID,
-	SolplaceClient,
 	getGridCellBounds,
 	getGridCellCenter,
 	getVisibleGridCells,
@@ -11,7 +7,8 @@ import {
 } from "@solplace/shared"
 import maplibregl from "maplibre-gl"
 import "maplibre-gl/dist/maplibre-gl.css"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef } from "react"
+import { useSolplaceMap, useSolplaceStore } from "../stores"
 
 // MapLibre GL JS style for a basic map
 const MAP_STYLE: maplibregl.StyleSpecification = {
@@ -50,22 +47,27 @@ const SolplaceMap: React.FC<SolplaceMapProps> = ({
 }) => {
 	const mapContainer = useRef<HTMLDivElement>(null)
 	const mapRef = useRef<maplibregl.Map | null>(null)
-	const [isLoaded, setIsLoaded] = useState(false)
-	const [visibleLogos, setVisibleLogos] = useState<LogoPlacement[]>([])
-	const [currentZoom, setCurrentZoom] = useState(10)
 
-	const { connection } = useConnection()
-	const wallet = useAnchorWallet()
+	// Use store for map state - PROPERLY MEMOIZED!
+	const {
+		visibleLogos,
+		mapZoom,
+		isMapLoaded,
+		setVisibleLogos,
+		setMapZoom,
+		setMapLoaded,
+		setMapBounds
+	} = useSolplaceMap()
 
-	// Initialize Solplace client
-	const solplaceClient = useRef<SolplaceClient | null>(null)
+	// Use store for client - NO INITIALIZATION HERE!
+	const client = useSolplaceStore((state) => state.client)
 
 	const MIN_ZOOM_FOR_LOGOS = 16
 
 	// Render individual logos on map
 	const renderLogosOnMap = useCallback(
 		(logos: LogoPlacement[]) => {
-			if (!mapRef.current || !isLoaded) return
+			if (!mapRef.current || !isMapLoaded) return
 
 			const map = mapRef.current
 
@@ -213,7 +215,7 @@ const SolplaceMap: React.FC<SolplaceMapProps> = ({
 				}
 			})
 		},
-		[isLoaded, onLogoCellClick]
+		[isMapLoaded, onLogoCellClick]
 	)
 
 	// Show/hide grid overlay based on zoom level
@@ -228,6 +230,10 @@ const SolplaceMap: React.FC<SolplaceMapProps> = ({
 				maxLng: bounds.getEast(),
 				zoom: zoom
 			}
+
+			// Update store with current bounds and zoom
+			setMapBounds(mapBounds)
+			setMapZoom(zoom)
 
 			// Always notify parent component of bounds change
 			onBoundsChange?.(mapBounds)
@@ -299,21 +305,21 @@ const SolplaceMap: React.FC<SolplaceMapProps> = ({
 				}
 			}
 		},
-		[onBoundsChange]
+		[onBoundsChange, setMapBounds, setMapZoom]
 	)
 
 	// Update visible logos based on map bounds
 	const updateVisibleLogos = useCallback(
 		async (map: maplibregl.Map) => {
-			if (!solplaceClient.current) return
+			if (!client) return
 
 			const zoom = map.getZoom()
-			setCurrentZoom(zoom)
+			setMapZoom(zoom)
 
-			// Nascondi loghi se zoom troppo basso
+			// Hide logos if zoom too low
 			if (zoom < MIN_ZOOM_FOR_LOGOS) {
 				setVisibleLogos([])
-				// Nascondi layer se esiste
+				// Hide layer if exists
 				if (map.getLayer("logos")) {
 					map.setLayoutProperty("logos", "visibility", "none")
 				}
@@ -329,36 +335,25 @@ const SolplaceMap: React.FC<SolplaceMapProps> = ({
 				zoom: zoom
 			}
 
-			// Limita l'area massima per evitare troppe chiamate
+			// Limit maximum area to avoid too many calls
 			const latSpan = mapBounds.maxLat - mapBounds.minLat
 			const lngSpan = mapBounds.maxLng - mapBounds.minLng
-			const MAX_SPAN = 0.01 // ~1km circa
+			const MAX_SPAN = 0.01 // ~1km approximately
 
 			if (latSpan > MAX_SPAN || lngSpan > MAX_SPAN) {
-				console.warn(
-					"Area troppo grande, zoom ulteriormente per caricare i loghi"
-				)
+				console.warn("Area too large, zoom in further to load logos")
 				return
 			}
 
 			try {
-				const logos = await solplaceClient.current.getLogosInBounds(
-					mapBounds
-				)
+				const logos = await client.getLogosInBounds(mapBounds)
 				console.log(
 					`Loaded ${logos.length} logos for bounds:`,
 					mapBounds
 				)
-				console.log("Logos:", logos)
 				setVisibleLogos(logos)
 
-				// Update map display
-				renderLogosOnMap(logos)
-
-				// Update grid display
-				updateGridDisplay(map)
-
-				// Mostra layer se era nascosto
+				// Show layer if it was hidden
 				if (map.getLayer("logos")) {
 					map.setLayoutProperty("logos", "visibility", "visible")
 				}
@@ -366,10 +361,11 @@ const SolplaceMap: React.FC<SolplaceMapProps> = ({
 				console.error("Failed to load logos:", error)
 			}
 		},
-		[renderLogosOnMap, updateGridDisplay, MIN_ZOOM_FOR_LOGOS]
+		[client, setMapZoom, setVisibleLogos] // FIXED: Removed unstable callback dependencies
 	)
 
-	// Initialize map
+	// CRITICAL FIX: Initialize map separately from client
+	// This prevents the map from being recreated when modal state changes!
 	useEffect(() => {
 		if (!mapContainer.current || mapRef.current) return
 
@@ -378,67 +374,11 @@ const SolplaceMap: React.FC<SolplaceMapProps> = ({
 			style: MAP_STYLE,
 			center: [-117.267998, 32.991602], // San Diego coordinates
 			zoom: 10,
-			attributionControl: false // Remove attribution control completely
+			attributionControl: false
 		})
 
-		// Initialize Solplace client when wallet is connected
-		if (wallet) {
-			try {
-				const programId = new PublicKey(SOLPLACE_PROGRAM_ID)
-
-				solplaceClient.current = new SolplaceClient(
-					connection,
-					wallet,
-					programId,
-					{
-						enableCaching: true,
-						cacheExpiry: 5 * 60 * 1000, // 5 minutes
-						enableSubscriptions: true
-					}
-				)
-			} catch (error) {
-				console.error("Failed to initialize Solplace client:", error)
-			}
-		}
-
 		map.on("load", () => {
-			setIsLoaded(true)
-
-			// Add click handler
-			map.on("click", (e) => {
-				const { lat, lng } = e.lngLat
-
-				// Snap click to the nearest grid cell
-				const [gridLat, gridLng] = latLngToGridCell(lat, lng)
-				const [snappedLat, snappedLng] = getGridCellCenter(
-					gridLat,
-					gridLng
-				)
-
-				console.log(
-					`Click at ${lat}, ${lng} snapped to grid cell ${gridLat}, ${gridLng} (center: ${snappedLat}, ${snappedLng})`
-				)
-
-				onMapClick?.(snappedLat, snappedLng)
-			})
-
-			// Add hover handlers for fee estimation
-			map.on("mousemove", (e) => {
-				const { lat, lng } = e.lngLat
-
-				// Snap hover to the nearest grid cell
-				const [gridLat, gridLng] = latLngToGridCell(lat, lng)
-				const [snappedLat, snappedLng] = getGridCellCenter(
-					gridLat,
-					gridLng
-				)
-
-				onMapHover?.(snappedLat, snappedLng)
-			})
-
-			map.on("mouseleave", () => {
-				onMapHoverEnd?.()
-			})
+			setMapLoaded(true)
 
 			// Add move handler for loading logos with debouncing
 			let timeoutId: NodeJS.Timeout
@@ -462,21 +402,66 @@ const SolplaceMap: React.FC<SolplaceMapProps> = ({
 			map.remove()
 			mapRef.current = null
 		}
-	}, [
-		connection,
-		wallet,
-		onMapClick,
-		onMapHover,
-		onMapHoverEnd,
-		updateVisibleLogos
-	])
+		// CRITICAL: Only depend on static values - no callback dependencies!
+	}, [setMapLoaded, updateVisibleLogos])
+
+	// SEPARATE useEffect for updating event handlers
+	// This allows callbacks to change without recreating the map
+	useEffect(() => {
+		if (!mapRef.current || !isMapLoaded) return
+
+		const map = mapRef.current
+
+		// Store current handlers to avoid memory leaks
+		const clickHandler = (e: maplibregl.MapMouseEvent) => {
+			const { lat, lng } = e.lngLat
+			const [gridLat, gridLng] = latLngToGridCell(lat, lng)
+			const [snappedLat, snappedLng] = getGridCellCenter(gridLat, gridLng)
+			onMapClick?.(snappedLat, snappedLng)
+		}
+
+		const mouseMoveHandler = (e: maplibregl.MapMouseEvent) => {
+			const { lat, lng } = e.lngLat
+			const [gridLat, gridLng] = latLngToGridCell(lat, lng)
+			const [snappedLat, snappedLng] = getGridCellCenter(gridLat, gridLng)
+			onMapHover?.(snappedLat, snappedLng)
+		}
+
+		const mouseLeaveHandler = () => {
+			onMapHoverEnd?.()
+		}
+
+		// Add handlers
+		map.on("click", clickHandler)
+		map.on("mousemove", mouseMoveHandler)
+		map.on("mouseleave", mouseLeaveHandler)
+
+		// Cleanup function
+		return () => {
+			map.off("click", clickHandler)
+			map.off("mousemove", mouseMoveHandler)
+			map.off("mouseleave", mouseLeaveHandler)
+		}
+	}, [onMapClick, onMapHover, onMapHoverEnd, isMapLoaded])
+
+	// Update grid display when map loads or zoom changes
+	useEffect(() => {
+		if (!mapRef.current || !isMapLoaded) return
+		updateGridDisplay(mapRef.current)
+	}, [isMapLoaded, mapZoom, updateGridDisplay])
+
+	// Render logos when they change
+	useEffect(() => {
+		if (!mapRef.current || !isMapLoaded || !visibleLogos.length) return
+		renderLogosOnMap(visibleLogos)
+	}, [visibleLogos, isMapLoaded, renderLogosOnMap])
 
 	return (
 		<div className="relative w-full h-full">
 			<div ref={mapContainer} className="w-full h-full" />
 
 			{/* Loading overlay */}
-			{!isLoaded && (
+			{!isMapLoaded && (
 				<div className="absolute inset-0 backdrop-blur-sm bg-slate-900/80 flex items-center justify-center z-10">
 					<div className="text-center">
 						<div className="animate-spin rounded-full h-12 w-12 border-2 border-white/30 border-t-transparent mx-auto mb-5"></div>
@@ -488,7 +473,7 @@ const SolplaceMap: React.FC<SolplaceMapProps> = ({
 			)}
 
 			{/* Status panel */}
-			{isLoaded && (
+			{isMapLoaded && (
 				<div className="absolute bottom-4 left-4 floating-panel backdrop-blur-md pointer-events-auto w-60 sm:w-64 fade-in">
 					<div className="p-3 space-y-2 text-[11px] leading-relaxed">
 						<div className="flex items-center justify-between">
@@ -496,14 +481,14 @@ const SolplaceMap: React.FC<SolplaceMapProps> = ({
 								Zoom
 							</span>
 							<span className="font-mono text-slate-300">
-								{currentZoom.toFixed(1)}
+								{mapZoom.toFixed(1)}
 							</span>
 						</div>
 						<div className="flex items-center justify-between">
 							<span className="font-semibold text-slate-200/90">
 								Logos
 							</span>
-							{currentZoom < MIN_ZOOM_FOR_LOGOS ? (
+							{mapZoom < MIN_ZOOM_FOR_LOGOS ? (
 								<span className="text-amber-300 flex items-center gap-1">
 									⚠️{" "}
 									<span className="hidden sm:inline">

@@ -5,7 +5,7 @@ import {
 } from "@solana/wallet-adapter-react"
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui"
 import { clusterApiUrl } from "@solana/web3.js"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef } from "react"
 
 import CooldownTimer from "./components/CooldownTimer"
 import FeeEstimator from "./components/FeeEstimator"
@@ -19,12 +19,8 @@ import "@solana/wallet-adapter-react-ui/styles.css"
 
 import { useAnchorWallet, useConnection } from "@solana/wallet-adapter-react"
 import { PublicKey } from "@solana/web3.js"
-import type { MapBounds, PlacementFee, UserCooldown } from "@solplace/shared"
-import {
-	SOLPLACE_PROGRAM_ID,
-	SolplaceClient,
-	TREASURY_WALLET
-} from "@solplace/shared"
+import { TREASURY_WALLET } from "@solplace/shared"
+import { useSolplaceClient, useSolplaceUI, useSolplaceUser } from "./stores"
 
 const DEVNET_RPC_ENDPOINT =
 	import.meta.env.VITE_RPC_ENDPOINT ||
@@ -32,23 +28,26 @@ const DEVNET_RPC_ENDPOINT =
 
 // Inner component that uses wallet context
 const AppContent = () => {
-	const [selectedLocation, setSelectedLocation] = useState<{
-		lat: number
-		lng: number
-	} | null>(null)
-	const [placementFee, setPlacementFee] = useState<PlacementFee | null>(null)
-	const [userCooldown, setUserCooldown] = useState<UserCooldown | null>(null)
-	const [isPlacing, setIsPlacing] = useState(false)
-	const [showPlacer, setShowPlacer] = useState(false)
-	const [showLeaderboard, setShowLeaderboard] = useState(false)
-	const [currentBounds, setCurrentBounds] = useState<MapBounds | null>(null)
-	const [currentCellLogo, setCurrentCellLogo] = useState<{
-		logoUri: string
-		tokenMint: string
-		placedBy: string
-		placedAt: number
-		overwriteCount: number
-	} | null>(null)
+	// Use Zustand stores instead of local state
+	const {
+		selectedLocation,
+		placementFee,
+		showPlacer,
+		showLeaderboard,
+		currentBounds,
+		currentCellLogo,
+		setSelectedLocation,
+		setPlacementFee,
+		setShowPlacer,
+		setShowLeaderboard,
+		setCurrentBounds,
+		setCurrentCellLogo
+	} = useSolplaceUI()
+
+	const { userCooldown, isPlacing, setUserCooldown, setIsPlacing } =
+		useSolplaceUser()
+
+	const { client, initializeClient } = useSolplaceClient()
 
 	const wallet = useAnchorWallet()
 	const { connection } = useConnection()
@@ -58,17 +57,13 @@ const AppContent = () => {
 	const publicKey = wallet?.publicKey
 
 	// Initialize client when wallet is available
-	const client = useMemo(() => {
-		if (!wallet) return null
-
-		const programId = new PublicKey(SOLPLACE_PROGRAM_ID)
-
-		return new SolplaceClient(connection, wallet, programId, {
-			enableCaching: true,
-			cacheExpiry: 5 * 60 * 1000,
-			enableSubscriptions: true
-		})
-	}, [connection, wallet])
+	useEffect(() => {
+		if (wallet && connection) {
+			initializeClient(connection, wallet).catch((error) => {
+				console.error("Failed to initialize client:", error)
+			})
+		}
+	}, [connection, wallet, initializeClient])
 
 	// Handle map click
 	const handleMapClick = useCallback(
@@ -83,17 +78,7 @@ const AppContent = () => {
 			try {
 				if (client) {
 					const existing = await client.getLogoAtCoordinates(lat, lng)
-					setCurrentCellLogo(
-						existing
-							? {
-									logoUri: existing.logoUri,
-									tokenMint: existing.tokenMint,
-									placedBy: existing.placedBy,
-									placedAt: existing.placedAt,
-									overwriteCount: existing.overwriteCount
-							  }
-							: null
-					)
+					setCurrentCellLogo(existing)
 				}
 			} catch (e) {
 				console.warn("Failed to fetch existing logo", e)
@@ -118,7 +103,16 @@ const AppContent = () => {
 				)
 			}
 		},
-		[connected, publicKey, client]
+		[
+			connected,
+			publicKey,
+			client,
+			setCurrentCellLogo,
+			setPlacementFee,
+			setSelectedLocation,
+			setShowPlacer,
+			setUserCooldown
+		]
 	)
 
 	// Load user cooldown on wallet connect
@@ -134,7 +128,7 @@ const AppContent = () => {
 			}
 			loadCooldown()
 		}
-	}, [connected, publicKey, client])
+	}, [connected, publicKey, client, setUserCooldown])
 
 	// Handle token placement
 	const handlePlaceToken = useCallback(
@@ -187,7 +181,16 @@ const AppContent = () => {
 				setIsPlacing(false)
 			}
 		},
-		[selectedLocation, publicKey, connected, client]
+		[
+			selectedLocation,
+			publicKey,
+			connected,
+			client,
+			setIsPlacing,
+			setPlacementFee,
+			setSelectedLocation,
+			setShowPlacer
+		]
 	)
 
 	// Handle map hover for fee estimation with debounce
@@ -212,23 +215,13 @@ const AppContent = () => {
 						client.getLogoAtCoordinates(lat, lng)
 					])
 					setPlacementFee(fee)
-					setCurrentCellLogo(
-						logo
-							? {
-									logoUri: logo.logoUri,
-									tokenMint: logo.tokenMint,
-									placedBy: logo.placedBy,
-									placedAt: logo.placedAt,
-									overwriteCount: logo.overwriteCount
-							  }
-							: null
-					)
+					setCurrentCellLogo(logo)
 				} catch (error) {
 					console.error("Failed to calculate hover fee:", error)
 				}
 			}, 300)
 		},
-		[connected, client, showPlacer]
+		[connected, client, showPlacer, setCurrentCellLogo, setPlacementFee]
 	)
 
 	// Handle map hover end
@@ -243,7 +236,7 @@ const AppContent = () => {
 			setPlacementFee(null)
 			setCurrentCellLogo(null)
 		}
-	}, [showPlacer])
+	}, [showPlacer, setCurrentCellLogo, setPlacementFee])
 
 	return (
 		<div className="relative h-screen w-screen overflow-hidden">
