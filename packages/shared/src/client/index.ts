@@ -3,6 +3,7 @@ import type {
 	LogoPlacement,
 	MapBounds,
 	PlacementFee,
+	TokenMetadata,
 	UserCooldown
 } from "../types"
 import type { AnchorWallet, SolplaceClientConfig } from "./types"
@@ -172,13 +173,14 @@ export class SolplaceClient {
 	/**
 	 * Get tokens visible in the current map area
 	 */
-	async getVisibleTokens(
-		bounds: MapBounds
-	): Promise<
+	async getVisibleTokens(bounds: MapBounds): Promise<
 		Array<{
 			tokenMint: string
 			logoUri?: string
 			coordinates: [number, number]
+			name?: string
+			symbol?: string
+			metadata?: TokenMetadata
 		}>
 	> {
 		return this.logos.getVisibleTokens(bounds)

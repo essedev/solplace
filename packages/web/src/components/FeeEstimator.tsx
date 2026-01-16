@@ -1,4 +1,4 @@
-import type { PlacementFee } from "@solplace/shared"
+import type { PlacementFee, TokenMetadata } from "@solplace/shared"
 import React from "react"
 
 interface FeeEstimatorProps {
@@ -9,6 +9,7 @@ interface FeeEstimatorProps {
 		placedBy: string
 		placedAt: number
 		overwriteCount: number
+		metadata?: TokenMetadata
 	} | null
 }
 
@@ -46,9 +47,13 @@ const FeeEstimator: React.FC<FeeEstimatorProps> = ({ fee, existingLogo }) => {
 						</div>
 						{existingLogo && (
 							<div className="mt-1 flex items-center gap-2 p-2 rounded-md bg-white/5 border border-white/10">
-								{existingLogo.logoUri && (
+								{(existingLogo.metadata?.image ||
+									existingLogo.logoUri) && (
 									<img
-										src={existingLogo.logoUri}
+										src={
+											existingLogo.metadata?.image ||
+											existingLogo.logoUri
+										}
 										alt="token"
 										className="w-6 h-6 rounded-full object-cover ring-1 ring-white/20"
 										onError={(e) => {
@@ -60,7 +65,29 @@ const FeeEstimator: React.FC<FeeEstimatorProps> = ({ fee, existingLogo }) => {
 								)}
 								<div className="flex-1 min-w-0">
 									<div className="font-mono truncate text-[10px] text-slate-300">
-										{existingLogo.tokenMint.slice(0, 8)}...
+										{existingLogo.metadata?.name ? (
+											<>
+												<span className="font-medium text-slate-200">
+													{existingLogo.metadata.name}
+												</span>
+												{existingLogo.metadata
+													.symbol && (
+													<span className="text-slate-400 ml-1">
+														(
+														{
+															existingLogo
+																.metadata.symbol
+														}
+														)
+													</span>
+												)}
+											</>
+										) : (
+											`${existingLogo.tokenMint.slice(
+												0,
+												8
+											)}...`
+										)}
 									</div>
 									<div className="text-[9px] text-slate-400">
 										Overwrites:{" "}

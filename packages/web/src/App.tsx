@@ -132,7 +132,7 @@ const AppContent = () => {
 
 	// Handle token placement
 	const handlePlaceToken = useCallback(
-		async (tokenMint: string) => {
+		async (tokenMint: string, logoUri?: string) => {
 			if (!selectedLocation || !publicKey || !connected || !client) return
 
 			setIsPlacing(true)
@@ -146,10 +146,26 @@ const AppContent = () => {
 					return
 				}
 
-				// Resolve logo URI for the token
-				const { LogoResolver } = await import("@solplace/shared")
-				const logoResolver = new LogoResolver()
-				const resolvedLogo = await logoResolver.resolveLogo(tokenMint)
+				// Always resolve metadata to get the most reliable image URL
+				const { tokenMetadataResolver } = await import(
+					"@solplace/shared"
+				)
+				const metadata = await tokenMetadataResolver.resolveMetadata(
+					tokenMint
+				)
+
+				// Use metadata image as primary source, fallback to provided logoUri, then to identicon
+				const finalLogoUri =
+					metadata?.image ||
+					logoUri ||
+					`https://api.dicebear.com/7.x/identicon/svg?seed=${tokenMint}&size=64`
+
+				console.log(
+					"📸 Using logo URI:",
+					finalLogoUri,
+					"from source:",
+					metadata?.source || "fallback"
+				)
 
 				// Use configured treasury address
 				const treasuryAddress = new PublicKey(TREASURY_WALLET)
@@ -159,7 +175,7 @@ const AppContent = () => {
 					selectedLocation.lat,
 					selectedLocation.lng,
 					new PublicKey(tokenMint),
-					resolvedLogo.logoUri,
+					finalLogoUri,
 					treasuryAddress
 				)
 

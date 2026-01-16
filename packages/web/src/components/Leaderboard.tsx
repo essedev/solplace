@@ -1,10 +1,14 @@
-import type { MapBounds, SolplaceClient } from "@solplace/shared"
+import type { MapBounds, SolplaceClient, TokenMetadata } from "@solplace/shared"
 import React, { useCallback, useEffect, useState } from "react"
 
 interface VisibleToken {
 	tokenMint: string
 	logoUri?: string
 	coordinates: [number, number]
+	// Add metadata fields for better display
+	name?: string
+	symbol?: string
+	metadata?: TokenMetadata
 }
 
 interface LeaderboardProps {
@@ -115,10 +119,18 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
 											{index + 1}
 										</div>
 										<div className="w-10 h-10 flex-shrink-0">
-											{token.logoUri ? (
+											{token.logoUri ||
+											token.metadata?.image ? (
 												<img
-													src={token.logoUri}
-													alt={`${token.tokenMint} logo`}
+													src={
+														token.metadata?.image ||
+														token.logoUri
+													}
+													alt={`${
+														token.name ||
+														token.metadata?.name ||
+														token.tokenMint
+													} logo`}
 													className="w-full h-full rounded-full object-cover border border-white/60 shadow-inner"
 													onError={(e) => {
 														;(
@@ -134,8 +146,31 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
 										</div>
 										<div className="flex-1 min-w-0">
 											<div className="font-mono text-xs font-semibold text-slate-800 truncate">
-												{formatTokenAddress(
-													token.tokenMint
+												{token.name ||
+												token.metadata?.name ? (
+													<>
+														<span className="font-semibold">
+															{token.name ||
+																token.metadata
+																	?.name}
+														</span>
+														{(token.symbol ||
+															token.metadata
+																?.symbol) && (
+															<span className="text-slate-500 ml-1">
+																(
+																{token.symbol ||
+																	token
+																		.metadata
+																		?.symbol}
+																)
+															</span>
+														)}
+													</>
+												) : (
+													formatTokenAddress(
+														token.tokenMint
+													)
 												)}
 											</div>
 											<div className="text-[10px] text-slate-500">

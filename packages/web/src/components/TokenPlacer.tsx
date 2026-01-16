@@ -1,11 +1,12 @@
 import { PublicKey } from "@solana/web3.js"
-import type { PlacementFee } from "@solplace/shared"
-import React, { useState } from "react"
+import type { PlacementFee, TokenMetadata } from "@solplace/shared"
+import { tokenMetadataResolver } from "@solplace/shared"
+import React, { useCallback, useEffect, useState } from "react"
 
 interface TokenPlacerProps {
 	location: { lat: number; lng: number }
 	fee: PlacementFee | null
-	onPlaceToken: (tokenMint: string) => Promise<void>
+	onPlaceToken: (tokenMint: string, logoUri?: string) => Promise<void>
 	onClose: () => void
 	isPlacing: boolean
 	validateTokenMint?: (tokenMint: PublicKey) => Promise<boolean>
@@ -15,6 +16,7 @@ interface TokenPlacerProps {
 		placedBy: string
 		placedAt: number
 		overwriteCount: number
+		metadata?: TokenMetadata
 	} | null
 }
 
@@ -30,6 +32,64 @@ const TokenPlacer: React.FC<TokenPlacerProps> = ({
 	const [tokenMint, setTokenMint] = useState("")
 	const [isValidating, setIsValidating] = useState(false)
 	const [validationError, setValidationError] = useState<string | null>(null)
+	const [tokenPreview, setTokenPreview] = useState<TokenMetadata | null>(null)
+
+	const validateTokenAddress = useCallback(async () => {
+		if (!tokenMint.trim() || !validateTokenMint) return
+		setIsValidating(true)
+		setValidationError(null)
+		setTokenPreview(null)
+
+		try {
+			const pk = new PublicKey(tokenMint.trim())
+			const ok = await validateTokenMint(pk)
+			if (!ok) {
+				setValidationError("This address is not a valid SPL token mint")
+				return
+			}
+
+			// If validation passed, try to get metadata
+			console.log("🔍 Fetching token metadata...")
+			const metadata = await tokenMetadataResolver.resolveMetadata(
+				tokenMint.trim()
+			)
+			if (metadata) {
+				console.log("✅ Metadata found:", metadata)
+				setTokenPreview(metadata)
+			} else {
+				console.log("⚠️ No metadata found, using fallback")
+				// Still show a preview with the address
+				setTokenPreview({
+					mintAddress: tokenMint.trim(),
+					name: `${tokenMint.trim().slice(0, 8)}...`,
+					symbol: "TOKEN",
+					source: "fallback",
+					resolvedAt: Date.now()
+				})
+			}
+		} catch {
+			setValidationError("Invalid token address format")
+		} finally {
+			setIsValidating(false)
+		}
+	}, [tokenMint, validateTokenMint])
+
+	// Auto-validate with debounce
+	useEffect(() => {
+		if (!tokenMint.trim()) {
+			setTokenPreview(null)
+			setValidationError(null)
+			return
+		}
+
+		if (tokenMint.trim().length >= 32) {
+			const timer = setTimeout(() => {
+				validateTokenAddress()
+			}, 1000) // 1 second debounce
+
+			return () => clearTimeout(timer)
+		}
+	}, [tokenMint, validateTokenAddress])
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault()
@@ -38,25 +98,12 @@ const TokenPlacer: React.FC<TokenPlacerProps> = ({
 			return alert("Invalid token address format")
 		if (validationError) return alert(validationError)
 		try {
-			await onPlaceToken(tokenMint.trim())
+			// Pass the resolved image URI from metadata if available
+			// This ensures we always use the best quality image source
+			const logoUri = tokenPreview?.image
+			await onPlaceToken(tokenMint.trim(), logoUri)
 		} catch (err) {
 			console.error("Failed to place token", err)
-		}
-	}
-
-	const validateTokenAddress = async () => {
-		if (!tokenMint.trim() || !validateTokenMint) return
-		setIsValidating(true)
-		setValidationError(null)
-		try {
-			const pk = new PublicKey(tokenMint.trim())
-			const ok = await validateTokenMint(pk)
-			if (!ok)
-				setValidationError("This address is not a valid SPL token mint")
-		} catch {
-			setValidationError("Invalid token address format")
-		} finally {
-			setIsValidating(false)
 		}
 	}
 
@@ -102,9 +149,13 @@ const TokenPlacer: React.FC<TokenPlacerProps> = ({
 					)}
 					{fee?.isOverwrite && existingLogo && (
 						<div className="mt-1 rounded-lg bg-white/60 backdrop-blur-sm border border-white/70 p-2 flex items-center gap-3 text-[11px]">
-							{existingLogo.logoUri && (
+							{(existingLogo.metadata?.image ||
+								existingLogo.logoUri) && (
 								<img
-									src={existingLogo.logoUri}
+									src={
+										existingLogo.metadata?.image ||
+										existingLogo.logoUri
+									}
 									alt="current logo"
 									className="w-8 h-8 rounded-full object-cover ring-1 ring-white/40"
 									onError={(e) => {
@@ -116,7 +167,28 @@ const TokenPlacer: React.FC<TokenPlacerProps> = ({
 							)}
 							<div className="flex-1 min-w-0">
 								<div className="font-mono truncate text-slate-700">
-									{existingLogo.tokenMint.slice(0, 10)}...
+									{existingLogo.metadata?.name ? (
+										<>
+											<span className="font-semibold text-slate-800">
+												{existingLogo.metadata.name}
+											</span>
+											{existingLogo.metadata.symbol && (
+												<span className="text-slate-500 ml-1">
+													(
+													{
+														existingLogo.metadata
+															.symbol
+													}
+													)
+												</span>
+											)}
+										</>
+									) : (
+										`${existingLogo.tokenMint.slice(
+											0,
+											10
+										)}...`
+									)}
 								</div>
 								<div className="text-[10px] text-slate-500">
 									Placed by{" "}
@@ -162,6 +234,46 @@ const TokenPlacer: React.FC<TokenPlacerProps> = ({
 								</div>
 							)}
 						</div>
+
+						{/* Token Preview */}
+						{tokenPreview && !validationError && (
+							<div className="mt-3 rounded-lg bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200/50 p-3">
+								<div className="flex items-center gap-3">
+									{tokenPreview.image && (
+										<img
+											src={tokenPreview.image}
+											alt="token logo"
+											className="w-10 h-10 rounded-full object-cover ring-2 ring-purple-200"
+											onError={(e) => {
+												;(
+													e.target as HTMLImageElement
+												).style.display = "none"
+											}}
+										/>
+									)}
+									<div className="flex-1 min-w-0">
+										<div className="font-medium text-purple-900">
+											{tokenPreview.name}
+											{tokenPreview.symbol &&
+												tokenPreview.symbol !==
+													"TOKEN" && (
+													<span className="text-purple-600 ml-1">
+														({tokenPreview.symbol})
+													</span>
+												)}
+										</div>
+										<div className="text-[10px] text-purple-600">
+											Source: {tokenPreview.source}
+											{tokenPreview.source ===
+												"metaplex-onchain" && " ✨"}
+										</div>
+									</div>
+									<div className="text-green-600 text-xs">
+										✓
+									</div>
+								</div>
+							</div>
+						)}
 					</div>
 
 					{fee && (

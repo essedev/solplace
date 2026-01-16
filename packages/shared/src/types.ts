@@ -21,6 +21,8 @@ export interface LogoPlacement {
 	overwriteCount: number
 	/** PDA bump seed */
 	bump: number
+	/** Optional token metadata (resolved client-side) */
+	metadata?: TokenMetadata
 }
 
 /**
@@ -92,6 +94,28 @@ export interface ResolvedLogo {
 	resolvedAt: number
 	/** Content hash for verification */
 	hash: string
+}
+
+/**
+ * Token metadata information
+ */
+export interface TokenMetadata {
+	/** Token mint address */
+	mintAddress: string
+	/** Token name */
+	name: string
+	/** Token symbol */
+	symbol: string
+	/** Token description */
+	description?: string
+	/** Number of decimals */
+	decimals?: number
+	/** Image URI */
+	image?: string
+	/** Source that provided the metadata */
+	source: string
+	/** When this was resolved */
+	resolvedAt: number
 }
 
 /**

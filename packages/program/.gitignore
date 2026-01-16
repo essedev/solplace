@@ -1,0 +1,15 @@
+.anchor
+.DS_Store
+target
+**/*.rs.bk
+node_modules
+test-ledger
+.yarn
+
+# Generated token files (may contain private keys)
+scripts/tokens/
+
+# Keypairs and wallet files
+*-keypair.json
+id.json
+wallet.json

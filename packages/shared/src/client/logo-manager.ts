@@ -1,5 +1,5 @@
 import { getVisibleGridCells, GRID_CELL_SIZE } from "../grid-utils"
-import type { LogoPlacement, MapBounds } from "../types"
+import type { LogoPlacement, MapBounds, TokenMetadata } from "../types"
 import { CoreClient } from "./core-client"
 import type { LogoLoadResult, SolplaceClientConfig } from "./types"
 
@@ -154,23 +154,30 @@ export class LogoManager {
 	/**
 	 * Get tokens visible in a specific area (simplified leaderboard)
 	 */
-	async getVisibleTokens(
-		bounds: MapBounds
-	): Promise<
+	async getVisibleTokens(bounds: MapBounds): Promise<
 		Array<{
 			tokenMint: string
 			logoUri?: string
 			coordinates: [number, number]
+			name?: string
+			symbol?: string
+			metadata?: TokenMetadata
 		}>
 	> {
 		// Load logos in the current bounds
 		const logos = await this.loadLogosInBounds(bounds)
 
-		// Convert to simplified format
+		// Convert to simplified format with metadata
 		return logos.map((logo) => ({
 			tokenMint: logo.tokenMint,
 			logoUri: logo.logoUri,
-			coordinates: logo.coordinates
+			coordinates: logo.coordinates,
+			// Include metadata fields if available
+			...(logo.metadata && {
+				name: logo.metadata.name,
+				symbol: logo.metadata.symbol,
+				metadata: logo.metadata
+			})
 		}))
 	}
 

@@ -7,6 +7,7 @@ import {
 	VersionedTransaction
 } from "@solana/web3.js"
 import { SolplaceProgram } from "../idl/solplace_program"
+import { tokenMetadataResolver } from "../token-metadata-resolver"
 import type { LogoPlacement, PlacementFee, UserCooldown } from "../types"
 import {
 	calculatePlacementFee,
@@ -86,7 +87,7 @@ export class CoreClient {
 			)
 
 			// Convert to LogoPlacement format
-			return {
+			const logoPlacement: LogoPlacement = {
 				coordinates: logoAccount.coordinates as [number, number],
 				tokenMint: logoAccount.tokenMint.toString(),
 				logoUri: logoAccount.logoUri,
@@ -96,6 +97,23 @@ export class CoreClient {
 				overwriteCount: logoAccount.overwriteCount,
 				bump: logoAccount.bump
 			}
+
+			// Try to resolve token metadata
+			try {
+				const metadata = await tokenMetadataResolver.resolveMetadata(
+					logoPlacement.tokenMint
+				)
+				if (metadata) {
+					logoPlacement.metadata = metadata
+				}
+			} catch (error) {
+				console.warn(
+					`Failed to resolve metadata for token ${logoPlacement.tokenMint}:`,
+					error
+				)
+			}
+
+			return logoPlacement
 		} catch (error) {
 			// Account doesn't exist or coordinates not found
 			return null

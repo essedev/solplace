@@ -72,8 +72,11 @@ const SolplaceMap: React.FC<SolplaceMapProps> = ({
 			const map = mapRef.current
 
 			// Remove existing logo layers
-			if (map.getLayer("logos")) {
-				map.removeLayer("logos")
+			if (map.getLayer("logo-fills")) {
+				map.removeLayer("logo-fills")
+			}
+			if (map.getLayer("logo-borders")) {
+				map.removeLayer("logo-borders")
 			}
 			if (map.getSource("logos")) {
 				map.removeSource("logos")
@@ -87,29 +90,90 @@ const SolplaceMap: React.FC<SolplaceMapProps> = ({
 					// Skip if already loaded
 					if (map.hasImage(imageId)) continue
 
+					// Determine the best image URL to use
+					// Priority: metadata.image > logoUri > fallback
+					const imageUrl = logo.metadata?.image || logo.logoUri
+
 					try {
-						// Load the image
-						const img = new Image()
-						img.crossOrigin = "anonymous"
+						if (imageUrl) {
+							// Load the image
+							const img = new Image()
+							img.crossOrigin = "anonymous"
 
-						await new Promise((resolve, reject) => {
-							img.onload = resolve
-							img.onerror = reject
-							img.src = logo.logoUri
-						})
+							await new Promise((resolve, reject) => {
+								img.onload = resolve
+								img.onerror = reject
+								img.src = imageUrl
+							})
 
-						// Add to map
-						map.addImage(imageId, img, { sdf: false })
+							// Create a canvas to resize and properly orient the image
+							const canvas = document.createElement("canvas")
+							// Use a size that matches the expected pattern size
+							const size = 256 // Larger size for better pattern quality
+							canvas.width = size
+							canvas.height = size
+							const ctx = canvas.getContext("2d")!
+
+							// Clear canvas with transparent background
+							ctx.clearRect(0, 0, size, size)
+
+							// Enable image smoothing for better quality
+							ctx.imageSmoothingEnabled = true
+							ctx.imageSmoothingQuality = "high"
+
+							// Calculate dimensions to cover the square (object-fit: cover behavior)
+							const imgAspect = img.width / img.height
+							let drawWidth,
+								drawHeight,
+								offsetX = 0,
+								offsetY = 0
+
+							if (imgAspect > 1) {
+								// Image is wider than tall
+								drawHeight = size
+								drawWidth = size * imgAspect
+								offsetX = -(drawWidth - size) / 2
+							} else {
+								// Image is taller than wide
+								drawWidth = size
+								drawHeight = size / imgAspect
+								offsetY = -(drawHeight - size) / 2
+							}
+
+							// Draw the image with object-cover behavior
+							ctx.drawImage(
+								img,
+								offsetX,
+								offsetY,
+								drawWidth,
+								drawHeight
+							)
+
+							// Convert canvas to ImageData and add as pattern
+							const imageData = ctx.getImageData(0, 0, size, size)
+
+							// For fill patterns, we need to add the image differently
+							map.addImage(imageId, imageData, {
+								sdf: false,
+								pixelRatio: 1
+							})
+						} else {
+							throw new Error("No image URL available")
+						}
 					} catch (error) {
 						console.warn(
 							`Failed to load logo for ${logo.tokenMint}:`,
 							error
 						)
 
+						// Skip if fallback already exists
+						if (map.hasImage(imageId)) continue
+
 						// Add a fallback circle
 						const canvas = document.createElement("canvas")
-						canvas.width = 32
-						canvas.height = 32
+						const size = 128 // Same size as token logos - higher resolution
+						canvas.width = size
+						canvas.height = size
 						const ctx = canvas.getContext("2d")!
 
 						// Draw a colored circle based on token mint
@@ -121,38 +185,74 @@ const SolplaceMap: React.FC<SolplaceMapProps> = ({
 								}, 0)
 							) % 360
 
+						// Clear canvas
+						ctx.clearRect(0, 0, size, size)
+
+						// Enable smoothing
+						ctx.imageSmoothingEnabled = true
+
+						// Draw circle with padding
+						const radius = size / 2 - 8
 						ctx.fillStyle = `hsl(${hue}, 70%, 50%)`
 						ctx.beginPath()
-						ctx.arc(16, 16, 12, 0, 2 * Math.PI)
+						ctx.arc(size / 2, size / 2, radius, 0, 2 * Math.PI)
 						ctx.fill()
 
-						// Convert canvas to ImageData
-						const imageData = ctx.getImageData(0, 0, 32, 32)
-						map.addImage(imageId, imageData)
+						// Add border
+						ctx.strokeStyle = `hsl(${hue}, 70%, 30%)`
+						ctx.lineWidth = 4
+						ctx.stroke()
+
+						// Convert canvas to ImageData and add as pattern
+						const imageData = ctx.getImageData(0, 0, size, size)
+						map.addImage(imageId, imageData, {
+							sdf: false,
+							pixelRatio: 1,
+							stretchX: [],
+							stretchY: []
+						})
 					}
 				}
 			}
 
 			// Load images first, then create the layer
 			loadLogoImages().then(() => {
-				// Create GeoJSON features for individual logos
-				const features = logos.map((logo) => ({
-					type: "Feature" as const,
-					geometry: {
-						type: "Point" as const,
-						coordinates: [
-							logo.coordinates[1] / 1_000_000, // lng
-							logo.coordinates[0] / 1_000_000 // lat
-						]
-					},
-					properties: {
-						tokenMint: logo.tokenMint,
-						logoUri: logo.logoUri,
-						placedBy: logo.placedBy,
-						placedAt: logo.placedAt,
-						overwriteCount: logo.overwriteCount
+				// Create GeoJSON features for individual logos as polygons (grid cells)
+				const features = logos.map((logo) => {
+					const lat = logo.coordinates[0] / 1_000_000
+					const lng = logo.coordinates[1] / 1_000_000
+
+					// Calculate the exact grid cell bounds for this logo
+					const cellSizeLat = 0.001 // GRID_CELL_SIZE in degrees (1000 microdegrees)
+
+					// Compensate for Web Mercator projection distortion
+					// At higher latitudes, longitude degrees become "narrower"
+					const latRadians = (lat * Math.PI) / 180
+					const cellSizeLng = cellSizeLat / Math.cos(latRadians)
+
+					return {
+						type: "Feature" as const,
+						geometry: {
+							type: "Polygon" as const,
+							coordinates: [
+								[
+									[lng, lat], // bottom-left
+									[lng + cellSizeLng, lat], // bottom-right
+									[lng + cellSizeLng, lat + cellSizeLat], // top-right
+									[lng, lat + cellSizeLat], // top-left
+									[lng, lat] // close polygon
+								]
+							]
+						},
+						properties: {
+							tokenMint: logo.tokenMint,
+							logoUri: logo.logoUri,
+							placedBy: logo.placedBy,
+							placedAt: logo.placedAt,
+							overwriteCount: logo.overwriteCount
+						}
 					}
-				}))
+				})
 
 				// Add source
 				map.addSource("logos", {
@@ -163,22 +263,36 @@ const SolplaceMap: React.FC<SolplaceMapProps> = ({
 					}
 				})
 
-				// Add layer with dynamic icon references
+				// Add fill layer for the grid cells
 				map.addLayer({
-					id: "logos",
-					type: "symbol",
+					id: "logo-fills",
+					type: "fill",
 					source: "logos",
-					layout: {
-						"icon-image": ["concat", "logo-", ["get", "tokenMint"]],
-						"icon-size": 0.8,
-						"icon-allow-overlap": true,
-						"icon-ignore-placement": true
+					paint: {
+						"fill-pattern": [
+							"concat",
+							"logo-",
+							["get", "tokenMint"]
+						],
+						"fill-opacity": 0.95
+					}
+				})
+
+				// Add stroke layer for borders
+				map.addLayer({
+					id: "logo-borders",
+					type: "line",
+					source: "logos",
+					paint: {
+						"line-color": "#ffffff",
+						"line-width": 1,
+						"line-opacity": 0.5
 					}
 				})
 			})
 
 			// Click handler for logo details -> delegate via callback
-			map.on("click", "logos", (e) => {
+			map.on("click", "logo-fills", (e) => {
 				if (e.features && e.features[0]) {
 					const feature = e
 						.features[0] as maplibregl.MapGeoJSONFeature
@@ -203,13 +317,13 @@ const SolplaceMap: React.FC<SolplaceMapProps> = ({
 			})
 
 			// Change cursor on hover
-			map.on("mouseenter", "logos", () => {
+			map.on("mouseenter", "logo-fills", () => {
 				if (mapRef.current) {
 					mapRef.current.getCanvas().style.cursor = "pointer"
 				}
 			})
 
-			map.on("mouseleave", "logos", () => {
+			map.on("mouseleave", "logo-fills", () => {
 				if (mapRef.current) {
 					mapRef.current.getCanvas().style.cursor = ""
 				}
@@ -319,9 +433,12 @@ const SolplaceMap: React.FC<SolplaceMapProps> = ({
 			// Hide logos if zoom too low
 			if (zoom < MIN_ZOOM_FOR_LOGOS) {
 				setVisibleLogos([])
-				// Hide layer if exists
-				if (map.getLayer("logos")) {
-					map.setLayoutProperty("logos", "visibility", "none")
+				// Hide layers if they exist
+				if (map.getLayer("logo-fills")) {
+					map.setLayoutProperty("logo-fills", "visibility", "none")
+				}
+				if (map.getLayer("logo-borders")) {
+					map.setLayoutProperty("logo-borders", "visibility", "none")
 				}
 				return
 			}
@@ -353,9 +470,16 @@ const SolplaceMap: React.FC<SolplaceMapProps> = ({
 				)
 				setVisibleLogos(logos)
 
-				// Show layer if it was hidden
-				if (map.getLayer("logos")) {
-					map.setLayoutProperty("logos", "visibility", "visible")
+				// Show layers if they were hidden
+				if (map.getLayer("logo-fills")) {
+					map.setLayoutProperty("logo-fills", "visibility", "visible")
+				}
+				if (map.getLayer("logo-borders")) {
+					map.setLayoutProperty(
+						"logo-borders",
+						"visibility",
+						"visible"
+					)
 				}
 			} catch (error) {
 				console.error("Failed to load logos:", error)

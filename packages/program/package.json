@@ -1,0 +1,42 @@
+{
+	"name": "@solplace/program",
+	"version": "0.1.0",
+	"main": "target/types/program.ts",
+	"types": "target/types/program.ts",
+	"scripts": {
+		"build": "anchor build",
+		"deploy": "anchor deploy",
+		"test": "anchor test",
+		"dev": "cargo check",
+		"dev:watch": "cargo watch -x check",
+		"test:dev": "anchor test --skip-deploy",
+		"generate:idl:types": "anchor build && cp target/types/solplace_program.ts ../shared/src/idl/ && cp target/idl/solplace_program.json ../shared/src/idl/",
+		"create-test-token": "ts-node scripts/create-test-token.ts",
+		"create-test-token-with-metadata": "ts-node scripts/create-test-token-with-metadata.ts",
+		"check-metadata": "ts-node scripts/check-metadata.ts",
+		"list-tokens": "ts-node scripts/create-test-token.ts list",
+		"extract-wallet-key": "ts-node scripts/extract-wallet-key.ts"
+	},
+	"dependencies": {
+		"@coral-xyz/anchor": "^0.31.1",
+		"@metaplex-foundation/mpl-token-metadata": "^3.4.0",
+		"@metaplex-foundation/umi": "^1.2.0",
+		"@metaplex-foundation/umi-bundle-defaults": "^1.2.0",
+		"@solana/spl-token": "^0.4.13",
+		"@solana/spl-token-metadata": "^0.1.6",
+		"@solana/web3.js": "^1.98.4",
+		"commander": "^14.0.0"
+	},
+	"devDependencies": {
+		"@types/bn.js": "^5.2.0",
+		"@types/chai": "^5.2.2",
+		"@types/mocha": "^10.0.10",
+		"@types/node": "^24.3.0",
+		"chai": "^5.2.1",
+		"mocha": "^11.7.1",
+		"prettier": "^3.6.2",
+		"ts-mocha": "^11.1.0",
+		"ts-node": "^10.9.2",
+		"typescript": "^5.9.2"
+	}
+}

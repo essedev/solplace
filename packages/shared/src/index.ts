@@ -2,6 +2,7 @@
 export * from "./constants"
 export * from "./grid-utils"
 export * from "./logo-resolver"
+export * from "./token-metadata-resolver"
 export * from "./types"
 export * from "./utils"
 
