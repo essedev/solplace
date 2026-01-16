@@ -9,6 +9,8 @@ Think Reddit's r/Place, but for Solana tokens on a real world map. Communities c
 ![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react)
 ![Rust](https://img.shields.io/badge/Rust-000000?style=flat&logo=rust)
 
+![SolPlace Map](docs/images/map-example.jpeg)
+
 ## How It Works
 
 1. **Connect** your Solana wallet
@@ -17,7 +19,47 @@ Think Reddit's r/Place, but for Solana tokens on a real world map. Communities c
 4. **Pay** a small fee in SOL
 5. **Watch** your token's logo appear on the map
 
+![Token Placement](docs/images/placement-example.jpeg)
+
 Someone placed BONK on Times Square? Overwrite it with WIF for 5x the fee. Territory wars are encouraged.
+
+## Why SolPlace?
+
+Every token community wants visibility. SolPlace turns that into a game.
+
+- **Meme coins** battle for iconic landmarks — the Eiffel Tower, the Colosseum, Mount Fuji
+- **DeFi protocols** claim financial districts — Wall Street, the City of London, Singapore
+- **New launches** grab unclaimed territory to get noticed
+- **Communities** coordinate to paint entire regions in their colors
+
+It's marketing, it's community building, it's on-chain PvP — all in one.
+
+## Features
+
+**For token communities:**
+- Claim territory and show dominance on the global map
+- Defend your spots or raid competitors
+- Rally your community for coordinated takeovers
+
+**For explorers:**
+- Discover new tokens by browsing the map
+- See which communities are most active
+- Find hidden gems in unexpected places
+
+**On-chain guarantees:**
+- Every placement is a Solana transaction
+- No backend, no database — just the blockchain
+- Verifiable history of who placed what, when
+
+## The Game
+
+The map starts empty. Early movers claim prime real estate cheap.
+
+As spots fill up, competition heats up. Want that landmark? Pay 5x what the last person paid. They lose their spot, you take it. They can take it back — for 5x what you paid.
+
+Prices escalate. Communities mobilize. Alliances form. Memes are made.
+
+30-second cooldown per wallet keeps it fair. No bots spamming placements.
 
 ## Try It Yourself
 
